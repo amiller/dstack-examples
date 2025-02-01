@@ -1,0 +1,11 @@
+playwright
+python-dotenv
+fastapi
+uvicorn
+jinja2
+python-multipart
+aiofiles
+langchain-openai
+browser-use
+lxml_html_clean
+telethon
