@@ -1,47 +1,25 @@
-FROM ubuntu:22.04
+FROM postgres:15
 
-# Create postgres user first
-RUN groupadd -r postgres --gid=999 && \
-    useradd -r -g postgres --uid=999 postgres
-
-# Install dependencies
-RUN apt-get update
-RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata
-RUN apt-get install -y \
-    gosu \
+# Install required packages
+RUN apt-get update && apt-get install -y \
     python3-pip \
-    postgresql-14 \
-    postgresql-client-14 \
-    openjdk-11-jre-headless \
-    curl \
+    python3-dev \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ZooKeeper
-RUN curl -L https://dlcdn.apache.org/zookeeper/zookeeper-3.8.4/apache-zookeeper-3.8.4-bin.tar.gz | tar xz -C /opt \
-    && mv /opt/apache-zookeeper-3.8.4-bin /opt/zookeeper
+# Install Patroni with PostgreSQL dependencies
+RUN pip3 install --no-cache-dir --break-system-packages \
+    patroni[postgresql] \
+    psycopg2-binary \
+    python-etcd
 
-# Install Patroni
-RUN pip3 install patroni[zookeeper] psycopg2-binary
+# Create required directories
+RUN mkdir -p /data/patroni /etc/patroni
 
-# Create necessary directories with proper permissions
-RUN mkdir -p /data/zookeeper /data/postgres /etc/patroni && \
-    chown -R postgres:postgres /data/postgres && \
-    chmod 700 /data/postgres && \
-    chown -R postgres:postgres /etc/patroni
-
-# Create necessary directories
-RUN mkdir -p /data/zookeeper /data/postgres /etc/patroni
-
-# ZooKeeper configuration
-COPY zoo.cfg /opt/zookeeper/conf/
-
-# Patroni configuration
+# Copy configuration files
 COPY patroni.yml /etc/patroni/
+COPY entrypoint.sh /
 
-# Startup script
-COPY start.sh /
-RUN chmod +x /start.sh
+RUN chmod +x /entrypoint.sh
 
-EXPOSE 2181 5432 8008
-
-CMD ["/start.sh"]
+ENTRYPOINT ["/entrypoint.sh"]

@@ -1,56 +1,90 @@
+### docker-compose.yml
 version: '3'
 
 services:
-  node1:
-    build: .
-    hostname: node1
+  etcd1:
+    image: bitnami/etcd:latest
     environment:
-      - NODE_NAME=node1
-      - NODE_IP=node1
-    volumes:
-      - node1-zk:/data/zookeeper
-      - node1-pg:/data/postgres
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_NAME=etcd1
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd1:2380
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd1:2379
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster
+      - ETCD_INITIAL_CLUSTER=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_ENABLE_V2=true
+      - ETCDCTL_API=2
     ports:
-      - "5432:5432"
-      - "2181:2181"
-      - "8008:8008"
+      - 2379:2379
+      - 2380:2380
 
-  node2:
-    build: .
-    hostname: node2
+  etcd2:
+    image: bitnami/etcd:latest
     environment:
-      - NODE_NAME=node2
-      - NODE_IP=node2
-    volumes:
-      - node2-zk:/data/zookeeper
-      - node2-pg:/data/postgres
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_NAME=etcd2
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd2:2380
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd2:2379
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster
+      - ETCD_INITIAL_CLUSTER=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_ENABLE_V2=true
+      - ETCDCTL_API=2
+    ports:
+      - 2381:2379
+      - 2382:2380
 
-  node3:
-    build: .
-    hostname: node3
+  etcd3:
+    image: bitnami/etcd:latest
     environment:
-      - NODE_NAME=node3
-      - NODE_IP=node3
-    volumes:
-      - node3-zk:/data/zookeeper
-      - node3-pg:/data/postgres
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_NAME=etcd3
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd3:2380
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd3:2379
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster
+      - ETCD_INITIAL_CLUSTER=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_ENABLE_V2=true
+      - ETCDCTL_API=2
+    ports:
+      - 2383:2379
+      - 2384:2380
 
-  node4:
+  postgres1:
     build: .
-    hostname: node4
     environment:
-      - NODE_NAME=node4
-      - NODE_IP=node4
-    volumes:
-      - node4-zk:/data/zookeeper
-      - node4-pg:/data/postgres
+      - NODE_IP=postgres1
+      - ETCD_HOSTS=etcd1:2379,etcd2:2379,etcd3:2379
+      - REPLICATION_PASSWORD=repl_pass
+      - POSTGRES_PASSWORD=postgres_pass
+    ports:
+      - 5432:5432
+      - 8008:8008
 
-volumes:
-  node1-zk:
-  node1-pg:
-  node2-zk:
-  node2-pg:
-  node3-zk:
-  node3-pg:
-  node4-zk:
-  node4-pg:
+  postgres2:
+    build: .
+    environment:
+      - NODE_IP=postgres2
+      - ETCD_HOSTS=etcd1:2379,etcd2:2379,etcd3:2379
+      - REPLICATION_PASSWORD=repl_pass
+      - POSTGRES_PASSWORD=postgres_pass
+    ports:
+      - 5433:5432
+      - 8009:8008
+
+  postgres3:
+    build: .
+    environment:
+      - NODE_IP=postgres3
+      - ETCD_HOSTS=etcd1:2379,etcd2:2379,etcd3:2379
+      - REPLICATION_PASSWORD=repl_pass
+      - POSTGRES_PASSWORD=postgres_pass
+    ports:
+      - 5434:5432
+      - 8010:8008
