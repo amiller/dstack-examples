@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  vpn-client:
+    image: alpine:latest
+    cap_add: [NET_ADMIN]
+    devices:
+      - /dev/net/tun
+    configs:
+      - source: tinc_conf
+        target: /etc/tinc/vpn/tinc.conf
+      - source: vpn_hosts
+        target: /etc/tinc/vpn/hosts/vpn
+    command: |
+      sh -c "
+        apk add --no-cache tinc &&
+        [ -f /etc/tinc/vpn/rsa_key.priv ] || tincd -c /etc/tinc/vpn -K4096 &&
+        tincd -n vpn -D
+      "
+    networks:
+      client-net:
+
+  test:
+    image: alpine:latest
+    depends_on: [vpn-client]
+    networks: [client-net]
+    command: sh -c "apk add --no-cache curl && sleep 3 && curl -s http://172.32.42.4"
+
+networks:
+  client-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
+
+configs:
+  tinc_conf:
+    content: |
+      Name = client
+      Interface = tun0
+      Mode = switch
+      ConnectTo = vpn
+  vpn_hosts:
+    content: |
+      AddressFamily = ipv4
+      Port = 655
+      Subnet = 172.32.42.3/32
+      Address = 172.20.20.20

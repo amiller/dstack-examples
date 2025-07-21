@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  vpn:
+    image: alpine:latest       # stick with Alpine + tinc for now
+    cap_add: [NET_ADMIN]       # NET_ADMIN is enough; no --privileged
+    devices:
+      - /dev/net/tun
+    volumes:
+      - ./server:/etc/tinc/vpn               # holds keys & conf
+    configs:
+      - source: tinc_conf
+        target: /etc/tinc/vpn/tinc.conf
+      - source: vpn_hosts
+        target: /etc/tinc/vpn/hosts/vpn
+    command: |
+      sh -c "
+        apk add --no-cache tinc &&
+        [ -f /etc/tinc/vpn/rsa_key.priv ] || tincd -c /etc/tinc/vpn -K4096
+        tincd -n vpn -D
+      "
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    ports:
+      - "655:655"
+    networks:
+      vpn-net:
+        ipv4_address: 172.32.42.3
+
+  web:
+    image: nginx:alpine
+    command: sh -c "echo 'Hello World!' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'"
+    networks:
+      vpn-net:
+        ipv4_address: 172.32.42.4
+
+networks:
+  vpn-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.32.42.0/24
+
+configs:
+  tinc_conf:
+    content: |
+      Name = vpn
+      Interface = tun0
+      Mode = switch
+  vpn_hosts:
+    content: |
+      AddressFamily = ipv4
+      Port = 655
+      Subnet = 172.32.42.3/32
+      
