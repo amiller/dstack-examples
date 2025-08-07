@@ -136,6 +136,40 @@ class DNSProvider(ABC):
         """
         pass
 
+    def set_a_record(
+        self, zone_id: str, name: str, ip_address: str, ttl: int = 60, proxied: bool = False
+    ) -> bool:
+        """Set an A record (delete existing and create new).
+
+        Args:
+            zone_id: The zone ID
+            name: The record name
+            ip_address: The IP address
+            ttl: Time to live
+            proxied: Whether to proxy through provider (if supported)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        existing_records = self.get_dns_records(zone_id, name, RecordType.A)
+        for record in existing_records:
+            # Check if record already exists with same IP
+            if record.content == ip_address:
+                print("A record with the same IP already exists")
+                return True
+            if record.id:
+                self.delete_dns_record(zone_id, record.id)
+
+        new_record = DNSRecord(
+            id=None,
+            name=name,
+            type=RecordType.A,
+            content=ip_address,
+            ttl=ttl,
+            proxied=proxied,
+        )
+        return self.create_dns_record(zone_id, new_record)
+
     def set_alias_record(
         self,
         zone_id: str,

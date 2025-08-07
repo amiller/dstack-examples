@@ -246,7 +246,7 @@ class LinodeDNSProvider(DNSProvider):
         Linode doesn't allow CAA and CNAME records on the same subdomain.
         Using A records solves this limitation.
         """
-
+        # Resolve domain to IP
         domain = content
         print(f"Trying to resolve: {domain}")
         ip_address = socket.gethostbyname(domain)
@@ -255,34 +255,17 @@ class LinodeDNSProvider(DNSProvider):
         if not ip_address:
             raise socket.gaierror("Could not resolve any variant of the domain")
 
-        # Check if A record already exists with same IP
-        existing_a_records = self.get_dns_records(zone_id, name, RecordType.A)
-        for record in existing_a_records:
-            if record.content == ip_address:
-                print("A record with the same IP already exists")
-                return True
-
-        # Delete any existing A or CNAME records for this name
-        for record_type in [RecordType.A, RecordType.CNAME]:
-            existing_records = self.get_dns_records(zone_id, name, record_type)
-            for record in existing_records:
-                if record.id:
-                    self.delete_dns_record(zone_id, record.id)
-
-        # Create A record instead of CNAME
-        new_record = DNSRecord(
-            id=None,
-            name=name,
-            type=RecordType.A,
-            content=ip_address,
-            ttl=ttl,
-            proxied=False,  # Linode doesn't support proxying
-        )
+        # Delete any existing CNAME records for this name (clean transition)
+        existing_cname_records = self.get_dns_records(zone_id, name, RecordType.CNAME)
+        for record in existing_cname_records:
+            if record.id:
+                self.delete_dns_record(zone_id, record.id)
 
         print(
             f"Creating A record for {name} pointing to {ip_address} (instead of CNAME to {content})"
         )
-        return self.create_dns_record(zone_id, new_record)
+        # Use the base class's set_a_record method with idempotency
+        return self.set_a_record(zone_id, name, ip_address, ttl, proxied=False)
 
     def create_caa_record(self, zone_id: str, caa_record: CAARecord) -> bool:
         """Create a CAA record."""
