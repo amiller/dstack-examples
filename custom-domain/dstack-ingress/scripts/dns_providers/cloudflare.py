@@ -13,6 +13,12 @@ class CloudflareDNSProvider(DNSProvider):
 
     DETECT_ENV = "CLOUDFLARE_API_TOKEN"
 
+    # Certbot configuration
+    CERTBOT_PLUGIN = "dns-cloudflare"
+    CERTBOT_PACKAGE = "certbot-dns-cloudflare==4.0.0"
+    CERTBOT_PROPAGATION_SECONDS = 120
+    CERTBOT_CREDENTIALS_FILE = "~/.cloudflare/cloudflare.ini"
+
     def __init__(self):
         super().__init__()
         self.api_token = os.getenv("CLOUDFLARE_API_TOKEN")
@@ -23,6 +29,28 @@ class CloudflareDNSProvider(DNSProvider):
             "Authorization": f"Bearer {self.api_token}",
             "Content-Type": "application/json",
         }
+
+    def setup_certbot_credentials(self) -> bool:
+        """Setup Cloudflare credentials file for certbot."""
+        credentials_file = os.path.expanduser(self.CERTBOT_CREDENTIALS_FILE)
+        credentials_dir = os.path.dirname(credentials_file)
+
+        try:
+            # Create credentials directory
+            os.makedirs(credentials_dir, exist_ok=True)
+
+            # Write credentials file
+            with open(credentials_file, "w") as f:
+                f.write(f"dns_cloudflare_api_token = {self.api_token}\n")
+
+            # Set secure permissions
+            os.chmod(credentials_file, 0o600)
+            print(f"Cloudflare credentials file created: {credentials_file}")
+            return True
+
+        except Exception as e:
+            print(f"Error setting up Cloudflare credentials: {e}", file=sys.stderr)
+            return False
 
     def _make_request(
         self, method: str, endpoint: str, data: Optional[Dict] = None

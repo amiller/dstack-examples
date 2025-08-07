@@ -14,6 +14,12 @@ class LinodeDNSProvider(DNSProvider):
 
     DETECT_ENV = "LINODE_API_TOKEN"
 
+    # Certbot configuration
+    CERTBOT_PLUGIN = "dns-linode"
+    CERTBOT_PACKAGE = "certbot-dns-linode"
+    CERTBOT_PROPAGATION_SECONDS = 300
+    CERTBOT_CREDENTIALS_FILE = "~/.linode/credentials.ini"
+
     def __init__(self):
         super().__init__()
         self.api_token = os.getenv("LINODE_API_TOKEN")
@@ -24,6 +30,28 @@ class LinodeDNSProvider(DNSProvider):
             "Authorization": f"Bearer {self.api_token}",
             "Content-Type": "application/json",
         }
+
+    def setup_certbot_credentials(self) -> bool:
+        """Setup Linode credentials file for certbot."""
+        credentials_file = os.path.expanduser(self.CERTBOT_CREDENTIALS_FILE)
+        credentials_dir = os.path.dirname(credentials_file)
+
+        try:
+            # Create credentials directory
+            os.makedirs(credentials_dir, exist_ok=True)
+
+            # Write credentials file
+            with open(credentials_file, "w") as f:
+                f.write(f"dns_linode_key = {self.api_token}\n")
+
+            # Set secure permissions
+            os.chmod(credentials_file, 0o600)
+            print(f"Linode credentials file created: {credentials_file}")
+            return True
+
+        except Exception as e:
+            print(f"Error setting up Linode credentials: {e}", file=sys.stderr)
+            return False
 
     def _make_request(
         self, method: str, endpoint: str, data: Optional[Dict] = None
@@ -226,6 +254,13 @@ class LinodeDNSProvider(DNSProvider):
 
         if not ip_address:
             raise socket.gaierror("Could not resolve any variant of the domain")
+
+        # Check if A record already exists with same IP
+        existing_a_records = self.get_dns_records(zone_id, name, RecordType.A)
+        for record in existing_a_records:
+            if record.content == ip_address:
+                print("A record with the same IP already exists")
+                return True
 
         # Delete any existing A or CNAME records for this name
         for record_type in [RecordType.A, RecordType.CNAME]:

@@ -15,19 +15,13 @@ setup_py_env() {
 
     pip install requests
 
-    # Install certbot and DNS provider plugins based on the provider
-    case "${DNS_PROVIDER:-cloudflare}" in
-    cloudflare)
-        pip install certbot-dns-cloudflare==4.0.0
-        ;;
-    linode)
-        pip install certbot-dns-linode
-        ;;
-    *)
-        echo "Warning: Unknown DNS provider ${DNS_PROVIDER}, installing cloudflare plugin"
-        pip install certbot-dns-cloudflare==4.0.0
-        ;;
-    esac
+    # Use the unified certbot manager to install plugins and setup credentials
+    echo "Setting up certbot environment"
+    certman.py setup
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to setup certbot environment"
+        exit 1
+    fi
 }
 
 PROXY_CMD="proxy"
@@ -96,7 +90,6 @@ EOF
 
 set_alias_record() {
     # Use the unified DNS manager to set the alias record
-    # This will automatically use CNAME for most providers, A record for Linode
     source /opt/app-venv/bin/activate
     echo "Setting alias record for $DOMAIN"
     dns_manager.py set_alias \
@@ -155,7 +148,7 @@ set_caa_record() {
 }
 
 bootstrap() {
-    echo "Bootstrap: Setting up $DOMAIN with ${DNS_PROVIDER:-cloudflare}"
+    echo "Bootstrap: Setting up $DOMAIN"
     source /opt/app-venv/bin/activate
     renew-certificate.sh -n
     set_alias_record
@@ -164,19 +157,7 @@ bootstrap() {
     touch /.bootstrapped
 }
 
-# Setup credentials based on DNS provider
-case "${DNS_PROVIDER:-cloudflare}" in
-cloudflare)
-    mkdir -p ~/.cloudflare
-    echo "dns_cloudflare_api_token = $CLOUDFLARE_API_TOKEN" >~/.cloudflare/cloudflare.ini
-    chmod 600 ~/.cloudflare/cloudflare.ini
-    ;;
-linode)
-    mkdir -p ~/.linode
-    echo "dns_linode_key = $LINODE_API_TOKEN" >~/.linode/credentials.ini
-    chmod 600 ~/.linode/credentials.ini
-    ;;
-esac
+# Credentials are now handled by certman.py setup
 
 # Setup Python environment and install dependencies first
 setup_py_env

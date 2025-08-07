@@ -50,9 +50,19 @@ class DNSProvider(ABC):
 
     DETECT_ENV = ""
 
+    # Certbot configuration - override in subclasses
+    CERTBOT_PLUGIN = ""
+    CERTBOT_PACKAGE = ""
+    CERTBOT_PROPAGATION_SECONDS = 120
+    CERTBOT_CREDENTIALS_FILE = ""  # Path to credentials file
+
     def __init__(self):
         """Initialize the DNS provider."""
         pass
+
+    def setup_certbot_credentials(self) -> bool:
+        """Setup credentials file for certbot. Override in subclasses if needed."""
+        return True  # Default: no setup needed
 
     @classmethod
     def suitable(cls) -> bool:
@@ -176,6 +186,10 @@ class DNSProvider(ABC):
         """
         existing_records = self.get_dns_records(zone_id, name, RecordType.CNAME)
         for record in existing_records:
+            # Check if record already exists with same content
+            if record.content == content:
+                print("CNAME record with the same content already exists")
+                return True
             if record.id:
                 self.delete_dns_record(zone_id, record.id)
 
@@ -205,6 +219,10 @@ class DNSProvider(ABC):
         """
         existing_records = self.get_dns_records(zone_id, name, RecordType.TXT)
         for record in existing_records:
+            # Check if record already exists with same content
+            if record.content == content or record.content == f'"{content}"':
+                print("TXT record with the same content already exists")
+                return True
             if record.id:
                 self.delete_dns_record(zone_id, record.id)
 
