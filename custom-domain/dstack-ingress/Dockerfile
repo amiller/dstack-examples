@@ -18,7 +18,6 @@ RUN set -e; \
     done && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        certbot \
         openssl \
         bash \
         python3-pip \
@@ -31,6 +30,17 @@ RUN set -e; \
         rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/ldconfig/aux-cache /tmp/pinned-packages.txt
 
 RUN mkdir -p /etc/letsencrypt /var/www/certbot /usr/share/nginx/html
+
+# Set up Python virtual environment and install certbot
+RUN set -e; \
+    python3 -m venv --system-site-packages /opt/app-venv && \
+    . /opt/app-venv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install certbot requests && \
+    # Create symlinks for system-wide access
+    ln -sf /opt/app-venv/bin/certbot /usr/local/bin/certbot && \
+    # Ensure the virtual environment is always activated for scripts
+    echo 'source /opt/app-venv/bin/activate' > /etc/profile.d/app-venv.sh
 
 COPY ./scripts /scripts/
 RUN chmod +x /scripts/*.sh /scripts/*.py
