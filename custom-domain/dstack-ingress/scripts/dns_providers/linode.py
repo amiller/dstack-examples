@@ -24,8 +24,7 @@ class LinodeDNSProvider(DNSProvider):
         super().__init__()
         self.api_token = os.getenv("LINODE_API_TOKEN")
         if not self.api_token:
-            raise ValueError(
-                "LINODE_API_TOKEN environment variable is required")
+            raise ValueError("LINODE_API_TOKEN environment variable is required")
         self.base_url = "https://api.linode.com/v4"
         self.headers = {
             "Authorization": f"Bearer {self.api_token}",
@@ -181,8 +180,7 @@ class LinodeDNSProvider(DNSProvider):
         """Get DNS records for a domain."""
         zone_id = self._ensure_zone_id(name)
         if not zone_id:
-            print(
-                f"Error: Could not find zone for domain {name}", file=sys.stderr)
+            print(f"Error: Could not find zone for domain {name}", file=sys.stderr)
             return []
 
         result = self._make_request("GET", f"domains/{zone_id}/records")
@@ -238,7 +236,8 @@ class LinodeDNSProvider(DNSProvider):
         zone_id = self._ensure_zone_id(record.name)
         if not zone_id:
             print(
-                f"Error: Could not find zone for domain {record.name}", file=sys.stderr)
+                f"Error: Could not find zone for domain {record.name}", file=sys.stderr
+            )
             return False
 
         subdomain = self._get_subdomain(record.name, zone_id)
@@ -268,13 +267,11 @@ class LinodeDNSProvider(DNSProvider):
         """Delete a DNS record."""
         zone_id = self._ensure_zone_id(domain)
         if not zone_id:
-            print(
-                f"Error: Could not find zone for domain {domain}", file=sys.stderr)
+            print(f"Error: Could not find zone for domain {domain}", file=sys.stderr)
             return False
 
         print(f"Deleting record ID: {record_id}")
-        result = self._make_request(
-            "DELETE", f"domains/{zone_id}/records/{record_id}")
+        result = self._make_request("DELETE", f"domains/{zone_id}/records/{record_id}")
 
         return result.get("success", False)
 
@@ -297,8 +294,7 @@ class LinodeDNSProvider(DNSProvider):
         print(f"✅ Resolved {domain} to IP: {ip_address}")
 
         if not ip_address:
-            raise socket.gaierror(
-                "Could not resolve any variant of the domain")
+            raise socket.gaierror("Could not resolve any variant of the domain")
 
         # Delete any existing CNAME records for this name (clean transition)
         existing_cname_records = self.get_dns_records(name, RecordType.CNAME)
@@ -317,7 +313,9 @@ class LinodeDNSProvider(DNSProvider):
         zone_id = self._ensure_zone_id(caa_record.name)
         if not zone_id:
             print(
-                f"Error: Could not find zone for domain {caa_record.name}", file=sys.stderr)
+                f"Error: Could not find zone for domain {caa_record.name}",
+                file=sys.stderr,
+            )
             return False
 
         subdomain = self._get_subdomain(caa_record.name, zone_id)

@@ -23,8 +23,7 @@ class CloudflareDNSProvider(DNSProvider):
         super().__init__()
         self.api_token = os.getenv("CLOUDFLARE_API_TOKEN")
         if not self.api_token:
-            raise ValueError(
-                "CLOUDFLARE_API_TOKEN environment variable is required")
+            raise ValueError("CLOUDFLARE_API_TOKEN environment variable is required")
         self.base_url = "https://api.cloudflare.com/client/v4"
         self.headers = {
             "Authorization": f"Bearer {self.api_token}",
@@ -58,8 +57,7 @@ class CloudflareDNSProvider(DNSProvider):
             return True
 
         except Exception as e:
-            print(
-                f"Error setting up Cloudflare credentials: {e}", file=sys.stderr)
+            print(f"Error setting up Cloudflare credentials: {e}", file=sys.stderr)
             return False
 
     def _make_request(
@@ -169,8 +167,7 @@ class CloudflareDNSProvider(DNSProvider):
         """Get DNS records for a domain."""
         zone_id = self._ensure_zone_id(name)
         if not zone_id:
-            print(
-                f"Error: Could not find zone for domain {name}", file=sys.stderr)
+            print(f"Error: Could not find zone for domain {name}", file=sys.stderr)
             return []
 
         params = f"zones/{zone_id}/dns_records?name={name}"
@@ -204,7 +201,8 @@ class CloudflareDNSProvider(DNSProvider):
         zone_id = self._ensure_zone_id(record.name)
         if not zone_id:
             print(
-                f"Error: Could not find zone for domain {record.name}", file=sys.stderr)
+                f"Error: Could not find zone for domain {record.name}", file=sys.stderr
+            )
             return False
 
         data = {
@@ -224,8 +222,7 @@ class CloudflareDNSProvider(DNSProvider):
             data["priority"] = record.priority
 
         print(f"Adding {record.type.value} record for {record.name}")
-        result = self._make_request(
-            "POST", f"zones/{zone_id}/dns_records", data)
+        result = self._make_request("POST", f"zones/{zone_id}/dns_records", data)
 
         return result.get("success", False)
 
@@ -233,8 +230,7 @@ class CloudflareDNSProvider(DNSProvider):
         """Delete a DNS record."""
         zone_id = self._ensure_zone_id(domain)
         if not zone_id:
-            print(
-                f"Error: Could not find zone for domain {domain}", file=sys.stderr)
+            print(f"Error: Could not find zone for domain {domain}", file=sys.stderr)
             return False
 
         print(f"Deleting record ID: {record_id}")
@@ -249,7 +245,9 @@ class CloudflareDNSProvider(DNSProvider):
         zone_id = self._ensure_zone_id(caa_record.name)
         if not zone_id:
             print(
-                f"Error: Could not find zone for domain {caa_record.name}", file=sys.stderr)
+                f"Error: Could not find zone for domain {caa_record.name}",
+                file=sys.stderr,
+            )
             return False
 
         clean_value = caa_record.value.strip('"')
@@ -268,7 +266,6 @@ class CloudflareDNSProvider(DNSProvider):
         print(
             f"Adding CAA record for {caa_record.name} with tag {caa_record.tag} and value {clean_value}"
         )
-        result = self._make_request(
-            "POST", f"zones/{zone_id}/dns_records", data)
+        result = self._make_request("POST", f"zones/{zone_id}/dns_records", data)
 
         return result.get("success", False)

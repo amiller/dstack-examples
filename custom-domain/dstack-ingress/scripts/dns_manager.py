@@ -36,40 +36,34 @@ def main():
 
         if args.action == "set_cname":
             if not args.content:
-                print("Error: --content is required for CNAME records",
-                      file=sys.stderr)
+                print("Error: --content is required for CNAME records", file=sys.stderr)
                 sys.exit(1)
 
             success = provider.set_alias_record(args.domain, args.content)
             if not success:
-                print(
-                    f"Failed to set alias record for {args.domain}", file=sys.stderr)
+                print(f"Failed to set alias record for {args.domain}", file=sys.stderr)
                 sys.exit(1)
             print(f"Successfully set alias record for {args.domain}")
 
         elif args.action == "set_alias":
             if not args.content:
-                print("Error: --content is required for alias records",
-                      file=sys.stderr)
+                print("Error: --content is required for alias records", file=sys.stderr)
                 sys.exit(1)
 
             success = provider.set_alias_record(args.domain, args.content)
             if not success:
-                print(
-                    f"Failed to set alias record for {args.domain}", file=sys.stderr)
+                print(f"Failed to set alias record for {args.domain}", file=sys.stderr)
                 sys.exit(1)
             print(f"Successfully set alias record for {args.domain}")
 
         elif args.action == "set_txt":
             if not args.content:
-                print("Error: --content is required for TXT records",
-                      file=sys.stderr)
+                print("Error: --content is required for TXT records", file=sys.stderr)
                 sys.exit(1)
 
             success = provider.set_txt_record(args.domain, args.content)
             if not success:
-                print(
-                    f"Failed to set TXT record for {args.domain}", file=sys.stderr)
+                print(f"Failed to set TXT record for {args.domain}", file=sys.stderr)
                 sys.exit(1)
             print(f"Successfully set TXT record for {args.domain}")
 
@@ -81,12 +75,9 @@ def main():
                 )
                 sys.exit(1)
 
-            success = provider.set_caa_record(
-                args.domain, args.caa_tag, args.caa_value
-            )
+            success = provider.set_caa_record(args.domain, args.caa_tag, args.caa_value)
             if not success:
-                print(
-                    f"Failed to set CAA record for {args.domain}", file=sys.stderr)
+                print(f"Failed to set CAA record for {args.domain}", file=sys.stderr)
                 sys.exit(1)
             print(f"Successfully set CAA record for {args.domain}")
 

@@ -217,9 +217,7 @@ class DNSProvider(ABC):
         )
         return self.create_dns_record(new_record)
 
-    def set_txt_record(
-        self, name: str, content: str, ttl: int = 60
-    ) -> bool:
+    def set_txt_record(self, name: str, content: str, ttl: int = 60) -> bool:
         """Set a TXT record (delete existing and create new).
 
         Args:
