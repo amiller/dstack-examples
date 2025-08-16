@@ -93,7 +93,6 @@ set_alias_record() {
     source /opt/app-venv/bin/activate
     echo "Setting alias record for $DOMAIN"
     dns_manager.py set_alias \
-        --zone-id "$DNS_ZONE_ID" \
         --domain "$DOMAIN" \
         --content "$GATEWAY_DOMAIN"
 
@@ -113,7 +112,6 @@ set_txt_record() {
     # Use the unified DNS manager to set the TXT record
     source /opt/app-venv/bin/activate
     dns_manager.py set_txt \
-        --zone-id "$DNS_ZONE_ID" \
         --domain "${TXT_PREFIX}.${DOMAIN}" \
         --content "$APP_ID:$PORT"
 
@@ -134,7 +132,6 @@ set_caa_record() {
     echo "Adding CAA record for $DOMAIN, accounturi=$ACCOUNT_URI"
     source /opt/app-venv/bin/activate
     dns_manager.py set_caa \
-        --zone-id "$DNS_ZONE_ID" \
         --domain "$DOMAIN" \
         --caa-tag "issue" \
         --caa-value "letsencrypt.org;validationmethods=dns-01;accounturi=$ACCOUNT_URI"
@@ -161,19 +158,6 @@ bootstrap() {
 
 # Setup Python environment and install dependencies first
 setup_py_env
-
-# Get DNS Zone ID if not provided
-if [ -z "$DNS_ZONE_ID" ]; then
-    echo "Getting DNS Zone ID for $DOMAIN"
-    source /opt/app-venv/bin/activate
-    DNS_ZONE_ID=$(dns_manager.py get_zone_id --domain "$DOMAIN")
-    if [ $? -ne 0 ] || [ -z "$DNS_ZONE_ID" ]; then
-        echo "Error: Failed to get DNS Zone ID for $DOMAIN"
-        exit 1
-    fi
-    export DNS_ZONE_ID
-    echo "Found DNS Zone ID: $DNS_ZONE_ID"
-fi
 
 # Check if it's the first time the container is started
 if [ ! -f "/.bootstrapped" ]; then

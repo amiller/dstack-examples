@@ -70,25 +70,12 @@ class DNSProvider(ABC):
         return os.environ.get(cls.DETECT_ENV) is not None
 
     @abstractmethod
-    def get_zone_id(self, domain: str) -> Optional[str]:
-        """Get the zone ID for a domain.
-
-        Args:
-            domain: The domain name
-
-        Returns:
-            The zone ID if found, None otherwise
-        """
-        pass
-
-    @abstractmethod
     def get_dns_records(
-        self, zone_id: str, name: str, record_type: Optional[RecordType] = None
+        self, name: str, record_type: Optional[RecordType] = None
     ) -> List[DNSRecord]:
         """Get DNS records for a domain.
 
         Args:
-            zone_id: The zone ID
             name: The record name
             record_type: Optional record type filter
 
@@ -98,11 +85,10 @@ class DNSProvider(ABC):
         pass
 
     @abstractmethod
-    def create_dns_record(self, zone_id: str, record: DNSRecord) -> bool:
+    def create_dns_record(self, record: DNSRecord) -> bool:
         """Create a DNS record.
 
         Args:
-            zone_id: The zone ID
             record: The DNS record to create
 
         Returns:
@@ -111,12 +97,12 @@ class DNSProvider(ABC):
         pass
 
     @abstractmethod
-    def delete_dns_record(self, zone_id: str, record_id: str) -> bool:
+    def delete_dns_record(self, record_id: str, domain: str) -> bool:
         """Delete a DNS record.
 
         Args:
-            zone_id: The zone ID
             record_id: The record ID to delete
+            domain: The domain name (for zone lookup)
 
         Returns:
             True if successful, False otherwise
@@ -124,11 +110,10 @@ class DNSProvider(ABC):
         pass
 
     @abstractmethod
-    def create_caa_record(self, zone_id: str, caa_record: CAARecord) -> bool:
+    def create_caa_record(self, caa_record: CAARecord) -> bool:
         """Create a CAA record.
 
         Args:
-            zone_id: The zone ID
             caa_record: The CAA record to create
 
         Returns:
@@ -137,12 +122,11 @@ class DNSProvider(ABC):
         pass
 
     def set_a_record(
-        self, zone_id: str, name: str, ip_address: str, ttl: int = 60, proxied: bool = False
+        self, name: str, ip_address: str, ttl: int = 60, proxied: bool = False
     ) -> bool:
         """Set an A record (delete existing and create new).
 
         Args:
-            zone_id: The zone ID
             name: The record name
             ip_address: The IP address
             ttl: Time to live
@@ -151,14 +135,14 @@ class DNSProvider(ABC):
         Returns:
             True if successful, False otherwise
         """
-        existing_records = self.get_dns_records(zone_id, name, RecordType.A)
+        existing_records = self.get_dns_records(name, RecordType.A)
         for record in existing_records:
             # Check if record already exists with same IP
             if record.content == ip_address:
                 print("A record with the same IP already exists")
                 return True
             if record.id:
-                self.delete_dns_record(zone_id, record.id)
+                self.delete_dns_record(record.id, name)
 
         new_record = DNSRecord(
             id=None,
@@ -168,11 +152,10 @@ class DNSProvider(ABC):
             ttl=ttl,
             proxied=proxied,
         )
-        return self.create_dns_record(zone_id, new_record)
+        return self.create_dns_record(new_record)
 
     def set_alias_record(
         self,
-        zone_id: str,
         name: str,
         content: str,
         ttl: int = 60,
@@ -184,7 +167,6 @@ class DNSProvider(ABC):
         to use A records instead (e.g., Linode to avoid CAA conflicts).
 
         Args:
-            zone_id: The zone ID
             name: The record name
             content: The alias target (domain name)
             ttl: Time to live
@@ -193,11 +175,10 @@ class DNSProvider(ABC):
         Returns:
             True if successful, False otherwise
         """
-        return self.set_cname_record(zone_id, name, content, ttl, proxied)
+        return self.set_cname_record(name, content, ttl, proxied)
 
     def set_cname_record(
         self,
-        zone_id: str,
         name: str,
         content: str,
         ttl: int = 60,
@@ -209,7 +190,6 @@ class DNSProvider(ABC):
         to use A records instead (e.g., Linode to avoid CAA conflicts).
 
         Args:
-            zone_id: The zone ID
             name: The record name
             content: The alias target (domain name)
             ttl: Time to live
@@ -218,14 +198,14 @@ class DNSProvider(ABC):
         Returns:
             True if successful, False otherwise
         """
-        existing_records = self.get_dns_records(zone_id, name, RecordType.CNAME)
+        existing_records = self.get_dns_records(name, RecordType.CNAME)
         for record in existing_records:
             # Check if record already exists with same content
             if record.content == content:
                 print("CNAME record with the same content already exists")
                 return True
             if record.id:
-                self.delete_dns_record(zone_id, record.id)
+                self.delete_dns_record(record.id, name)
 
         new_record = DNSRecord(
             id=None,
@@ -235,15 +215,14 @@ class DNSProvider(ABC):
             ttl=ttl,
             proxied=proxied,
         )
-        return self.create_dns_record(zone_id, new_record)
+        return self.create_dns_record(new_record)
 
     def set_txt_record(
-        self, zone_id: str, name: str, content: str, ttl: int = 60
+        self, name: str, content: str, ttl: int = 60
     ) -> bool:
         """Set a TXT record (delete existing and create new).
 
         Args:
-            zone_id: The zone ID
             name: The record name
             content: The TXT content
             ttl: Time to live
@@ -251,23 +230,22 @@ class DNSProvider(ABC):
         Returns:
             True if successful, False otherwise
         """
-        existing_records = self.get_dns_records(zone_id, name, RecordType.TXT)
+        existing_records = self.get_dns_records(name, RecordType.TXT)
         for record in existing_records:
             # Check if record already exists with same content
             if record.content == content or record.content == f'"{content}"':
                 print("TXT record with the same content already exists")
                 return True
             if record.id:
-                self.delete_dns_record(zone_id, record.id)
+                self.delete_dns_record(record.id, name)
 
         new_record = DNSRecord(
             id=None, name=name, type=RecordType.TXT, content=content, ttl=ttl
         )
-        return self.create_dns_record(zone_id, new_record)
+        return self.create_dns_record(new_record)
 
     def set_caa_record(
         self,
-        zone_id: str,
         name: str,
         tag: str,
         value: str,
@@ -277,7 +255,6 @@ class DNSProvider(ABC):
         """Set a CAA record (delete existing with same tag and create new).
 
         Args:
-            zone_id: The zone ID
             name: The record name
             tag: The CAA tag (issue, issuewild, iodef)
             value: The CAA value
@@ -287,14 +264,14 @@ class DNSProvider(ABC):
         Returns:
             True if successful, False otherwise
         """
-        existing_records = self.get_dns_records(zone_id, name, RecordType.CAA)
+        existing_records = self.get_dns_records(name, RecordType.CAA)
         for record in existing_records:
             if record.data and record.data.get("tag") == tag:
                 if record.data.get("value") == value:
                     print("CAA record with the same content already exists")
                     return True
                 if record.id:
-                    self.delete_dns_record(zone_id, record.id)
+                    self.delete_dns_record(record.id, name)
 
         caa_record = CAARecord(name=name, flags=flags, tag=tag, value=value, ttl=ttl)
-        return self.create_caa_record(zone_id, caa_record)
+        return self.create_caa_record(caa_record)

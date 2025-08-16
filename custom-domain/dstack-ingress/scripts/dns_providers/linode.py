@@ -24,12 +24,15 @@ class LinodeDNSProvider(DNSProvider):
         super().__init__()
         self.api_token = os.getenv("LINODE_API_TOKEN")
         if not self.api_token:
-            raise ValueError("LINODE_API_TOKEN environment variable is required")
+            raise ValueError(
+                "LINODE_API_TOKEN environment variable is required")
         self.base_url = "https://api.linode.com/v4"
         self.headers = {
             "Authorization": f"Bearer {self.api_token}",
             "Content-Type": "application/json",
         }
+        self.zone_id: Optional[str] = None  # Will be set when needed
+        self.zone_domain: Optional[str] = None  # Cache the domain for the zone
 
     def setup_certbot_credentials(self) -> bool:
         """Setup Linode credentials file for certbot."""
@@ -47,6 +50,12 @@ class LinodeDNSProvider(DNSProvider):
             # Set secure permissions
             os.chmod(credentials_file, 0o600)
             print(f"Linode credentials file created: {credentials_file}")
+
+            # Pre-fetch zone ID if we have a domain
+            domain = os.getenv("DOMAIN")
+            if domain:
+                self._ensure_zone_id(domain)
+
             return True
 
         except Exception as e:
@@ -104,7 +113,7 @@ class LinodeDNSProvider(DNSProvider):
             print(f"Unexpected Error: {str(e)}", file=sys.stderr)
             return {"success": False, "errors": [{"reason": str(e)}]}
 
-    def get_zone_id(self, domain: str) -> Optional[str]:
+    def _get_zone_id(self, domain: str) -> Optional[str]:
         """Get the domain ID for a domain in Linode."""
         result = self._make_request("GET", "domains")
 
@@ -149,10 +158,33 @@ class LinodeDNSProvider(DNSProvider):
         else:
             return fqdn
 
+    def _ensure_zone_id(self, domain: str) -> Optional[str]:
+        """Ensure we have a zone ID for the domain, fetching if necessary."""
+        # If we already have a zone_id and it's for a parent domain, reuse it
+        if self.zone_id and self.zone_domain:
+            if domain == self.zone_domain or domain.endswith(f".{self.zone_domain}"):
+                return self.zone_id
+
+        # Otherwise fetch the zone ID
+        self.zone_id = self._get_zone_id(domain)
+        if self.zone_id:
+            # Store the base domain for this zone
+            # For Linode, we need to get the actual domain from the API
+            result = self._make_request("GET", f"domains/{self.zone_id}")
+            if result.get("success", False):
+                self.zone_domain = result.get("data", {}).get("domain", "")
+        return self.zone_id
+
     def get_dns_records(
-        self, zone_id: str, name: str, record_type: Optional[RecordType] = None
+        self, name: str, record_type: Optional[RecordType] = None
     ) -> List[DNSRecord]:
         """Get DNS records for a domain."""
+        zone_id = self._ensure_zone_id(name)
+        if not zone_id:
+            print(
+                f"Error: Could not find zone for domain {name}", file=sys.stderr)
+            return []
+
         result = self._make_request("GET", f"domains/{zone_id}/records")
 
         if not result.get("success", False):
@@ -201,8 +233,14 @@ class LinodeDNSProvider(DNSProvider):
 
         return records
 
-    def create_dns_record(self, zone_id: str, record: DNSRecord) -> bool:
+    def create_dns_record(self, record: DNSRecord) -> bool:
         """Create a DNS record."""
+        zone_id = self._ensure_zone_id(record.name)
+        if not zone_id:
+            print(
+                f"Error: Could not find zone for domain {record.name}", file=sys.stderr)
+            return False
+
         subdomain = self._get_subdomain(record.name, zone_id)
 
         data = {
@@ -226,16 +264,22 @@ class LinodeDNSProvider(DNSProvider):
 
         return result.get("success", False)
 
-    def delete_dns_record(self, zone_id: str, record_id: str) -> bool:
+    def delete_dns_record(self, record_id: str, domain: str) -> bool:
         """Delete a DNS record."""
+        zone_id = self._ensure_zone_id(domain)
+        if not zone_id:
+            print(
+                f"Error: Could not find zone for domain {domain}", file=sys.stderr)
+            return False
+
         print(f"Deleting record ID: {record_id}")
-        result = self._make_request("DELETE", f"domains/{zone_id}/records/{record_id}")
+        result = self._make_request(
+            "DELETE", f"domains/{zone_id}/records/{record_id}")
 
         return result.get("success", False)
 
     def set_alias_record(
         self,
-        zone_id: str,
         name: str,
         content: str,
         ttl: int = 60,
@@ -253,22 +297,29 @@ class LinodeDNSProvider(DNSProvider):
         print(f"✅ Resolved {domain} to IP: {ip_address}")
 
         if not ip_address:
-            raise socket.gaierror("Could not resolve any variant of the domain")
+            raise socket.gaierror(
+                "Could not resolve any variant of the domain")
 
         # Delete any existing CNAME records for this name (clean transition)
-        existing_cname_records = self.get_dns_records(zone_id, name, RecordType.CNAME)
+        existing_cname_records = self.get_dns_records(name, RecordType.CNAME)
         for record in existing_cname_records:
             if record.id:
-                self.delete_dns_record(zone_id, record.id)
+                self.delete_dns_record(record.id, name)
 
         print(
             f"Creating A record for {name} pointing to {ip_address} (instead of CNAME to {content})"
         )
         # Use the base class's set_a_record method with idempotency
-        return self.set_a_record(zone_id, name, ip_address, ttl, proxied=False)
+        return self.set_a_record(name, ip_address, ttl, proxied=False)
 
-    def create_caa_record(self, zone_id: str, caa_record: CAARecord) -> bool:
+    def create_caa_record(self, caa_record: CAARecord) -> bool:
         """Create a CAA record."""
+        zone_id = self._ensure_zone_id(caa_record.name)
+        if not zone_id:
+            print(
+                f"Error: Could not find zone for domain {caa_record.name}", file=sys.stderr)
+            return False
+
         subdomain = self._get_subdomain(caa_record.name, zone_id)
 
         # Clean up the value

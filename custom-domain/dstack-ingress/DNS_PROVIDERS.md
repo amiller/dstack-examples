@@ -19,7 +19,6 @@ This guide explains how to configure dstack-ingress to work with different DNS p
 
 ### Optional Variables
 
-- `DNS_ZONE_ID` - Pre-configured zone ID (auto-detected if not provided)
 - `SET_CAA` - Enable CAA record setup (default: false)
 - `PORT` - HTTPS port (default: 443)
 - `TXT_PREFIX` - Prefix for TXT records (default: "_tapp-address")
@@ -85,7 +84,6 @@ If you're currently using the Cloudflare-only version:
 
 1. **No changes needed for Cloudflare users** - The default behavior remains Cloudflare
 2. **For other providers** - Add the `DNS_PROVIDER` environment variable and provider-specific credentials
-3. **Zone ID changes** - The variable `CLOUDFLARE_ZONE_ID` is now `DNS_ZONE_ID` (auto-detected if not set)
 
 ## Troubleshooting
 
