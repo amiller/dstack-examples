@@ -4,7 +4,7 @@ ACME_ACCOUNT_FILE=$(ls /etc/letsencrypt/accounts/acme-v02.api.letsencrypt.org/di
 CERT_FILE=/etc/letsencrypt/live/${DOMAIN}/fullchain.pem
 
 mkdir -p /evidences
-cd /evidences
+cd /evidences || exit
 cp "${ACME_ACCOUNT_FILE}" acme-account.json
 cp "${CERT_FILE}" cert.pem
 
