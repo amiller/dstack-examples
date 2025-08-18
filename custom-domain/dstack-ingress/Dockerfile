@@ -29,7 +29,12 @@ RUN set -e; \
         coreutils && \
         rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/ldconfig/aux-cache /tmp/pinned-packages.txt
 
-RUN mkdir -p /etc/letsencrypt /var/www/certbot /usr/share/nginx/html
+RUN mkdir -p \
+    /etc/letsencrypt \
+    /var/www/certbot \
+    /usr/share/nginx/html \
+    /etc/nginx/conf.d \
+    /var/log/nginx
 
 # Set up Python virtual environment and install certbot
 RUN set -e; \
