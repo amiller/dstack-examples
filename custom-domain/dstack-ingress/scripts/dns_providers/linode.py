@@ -44,6 +44,8 @@ class LinodeDNSProvider(DNSProvider):
 
             # Write credentials file
             with open(credentials_file, "w") as f:
+                f.write("# WARNING: This file contains sensitive credentials for Linode DNS API.\n")
+                f.write("# Ensure this file is kept secure and not shared.\n")
                 f.write(f"dns_linode_key = {self.api_token}\n")
 
             # Set secure permissions
