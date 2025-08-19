@@ -102,7 +102,7 @@ class CertManager:
         
         # Verify plugin installation
         try:
-            imported_module = __import__(self.provider.CERTBOT_PLUGIN_MODULE)
+            __import__(self.provider.CERTBOT_PLUGIN_MODULE)
             print(f"Plugin {self.provider.CERTBOT_PLUGIN} successfully imported")
             
             # Test if plugin is recognized by certbot
@@ -149,8 +149,6 @@ class CertManager:
         except Exception as e:
             print(f"Plugin verification warning: {e}")
             return True
-        
-        return True
 
     def _ensure_certbot_in_env(self) -> None:
         """Ensure certbot is installed in the current Python environment."""
