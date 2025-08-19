@@ -65,15 +65,13 @@ NAMECHEAP_CLIENT_IP=your-client-ip
 
 **Required Credentials:**
 - `NAMECHEAP_USERNAME` - Your Namecheap account username
-- `NAMECHEAP_API_KEY` - Your Namecheap API key (from https://ap.www.namecheap.com/settings/tools/api-access/)
-- `NAMECHEAP_CLIENT_IP` - Your public IP address (required for Namecheap API authentication)
+- `NAMECHEAP_API_KEY` - Your Namecheap API key (from https://ap.www.namecheap.com/settings/tools/apiaccess/)
+- `NAMECHEAP_CLIENT_IP` - The IP address of the node (required for Namecheap API authentication)
 
 **Important Notes for Namecheap:**
-- Namecheap API requires your client IP address for authentication
-- You can find your public IP at https://www.whatismyip.com/
+- Namecheap API requires node IP address for authentication, and you need add it to whitelist IP first.
 - Namecheap doesn't support CAA records through their API currently
 - The certbot plugin uses the format `certbot-dns-namecheap` package
-- DNS propagation time is set to 120 seconds by default
 
 ## Docker Compose Examples
 

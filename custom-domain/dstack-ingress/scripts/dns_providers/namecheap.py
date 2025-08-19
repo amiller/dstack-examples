@@ -12,7 +12,8 @@ class NamecheapDNSProvider(DNSProvider):
 
     DETECT_ENV = "NAMECHEAP_API_KEY"
     CERTBOT_PLUGIN = "dns-namecheap"
-    CERTBOT_PACKAGE = "certbot-dns-namecheap"
+    CERTBOT_PLUGIN_MODULE = "certbot_dns_namecheap"
+    CERTBOT_PACKAGE = "certbot-dns-namecheap==1.0.0"
     CERTBOT_PROPAGATION_SECONDS = 120
     CERTBOT_CREDENTIALS_FILE = "~/.namecheap/namecheap.ini"
 

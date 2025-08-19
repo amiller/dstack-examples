@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 
-from dns_providers import DNSProviderFactory
 import argparse
 import os
 import subprocess
 import sys
+import pkg_resources
 from typing import List, Optional, Tuple
 
 # Add script directory to path to import dns_providers
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from dns_providers import DNSProviderFactory
 
 
 class CertManager:
@@ -35,10 +37,9 @@ class CertManager:
 
         # Check if plugin is already installed
         try:
-            if self.provider.CERTBOT_PLUGIN == "dns-namecheap":
-                import certbot_dns_namecheap.dns_namecheap
-                print(f"Plugin {self.provider.CERTBOT_PACKAGE} is already installed")
-                return True
+            __import__(self.provider.CERTBOT_PLUGIN_MODULE)
+            print(f"Plugin {self.provider.CERTBOT_PACKAGE} is already installed")
+            return True
         except ImportError:
             pass  # Plugin not installed, continue with installation
 
@@ -48,7 +49,6 @@ class CertManager:
         install_methods = []
         
         # Method 1: Use the same python executable that's running this script
-        import sys
         install_methods.append([sys.executable, "-m", "pip", "install", self.provider.CERTBOT_PACKAGE])
         
         # Method 2: Use virtual environment pip if available
@@ -86,8 +86,6 @@ class CertManager:
         
         # Diagnostic information for troubleshooting
         try:
-            import sys
-            import pkg_resources
             print(f"Installed to Python: {sys.executable}")
             
             # Show certbot command
@@ -95,7 +93,7 @@ class CertManager:
             print(f"Using certbot: {' '.join(certbot_cmd)}")
             
             try:
-                dist = pkg_resources.get_distribution("certbot-dns-namecheap")
+                dist = pkg_resources.get_distribution(self.provider.CERTBOT_PACKAGE)
                 print(f"Package version: {dist.version} at {dist.location}")
             except pkg_resources.DistributionNotFound:
                 print("Warning: Package not found in current environment")
@@ -104,52 +102,50 @@ class CertManager:
         
         # Verify plugin installation
         try:
-            if self.provider.CERTBOT_PLUGIN == "dns-namecheap":
-                import certbot_dns_namecheap.dns_namecheap
-                print(f"Plugin {self.provider.CERTBOT_PLUGIN} successfully imported")
-                
-                # Test if plugin is recognized by certbot
-                certbot_cmd = self._get_certbot_command()
-                test_cmd = certbot_cmd + ["plugins"]
-                test_result = subprocess.run(test_cmd, capture_output=True, text=True, timeout=10)
-                
-                if test_result.returncode == 0 and "dns-namecheap" in test_result.stdout:
-                    print(f"✓ Plugin {self.provider.CERTBOT_PLUGIN} is available in certbot")
-                    return True
-                else:
-                    print(f"Warning: dns-namecheap plugin not found in certbot plugins list")
-                    if test_result.stderr:
-                        print(f"Plugin test stderr: {test_result.stderr}")
-                    
-                    # Debug plugin registration
-                    self._debug_plugin_registration()
-                    
-                    # Try force reinstall to fix plugin registration
-                    print("Attempting to fix plugin registration...")
-                    try:
-                        import sys
-                        force_cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", 
-                                   "--no-deps", self.provider.CERTBOT_PACKAGE]
-                        print(f"Running: {' '.join(force_cmd)}")
-                        force_result = subprocess.run(force_cmd, capture_output=True, text=True)
-                        
-                        if force_result.returncode == 0:
-                            # Test again after reinstall
-                            retest_cmd = certbot_cmd + ["plugins"]
-                            retest_result = subprocess.run(retest_cmd, capture_output=True, text=True, timeout=10)
-                            if retest_result.returncode == 0 and "dns-namecheap" in retest_result.stdout:
-                                print(f"✓ Plugin registration fixed after reinstall")
-                                return True
-                            else:
-                                print(f"Plugin still not registered, may work anyway")
-                        else:
-                            print(f"Force reinstall failed: {force_result.stderr}")
-                    except Exception as fix_error:
-                        print(f"Plugin fix attempt failed: {fix_error}")
-                    
-                    # Continue anyway - may work in Docker environments
-                    return True
+            imported_module = __import__(self.provider.CERTBOT_PLUGIN_MODULE)
+            print(f"Plugin {self.provider.CERTBOT_PLUGIN} successfully imported")
             
+            # Test if plugin is recognized by certbot
+            certbot_cmd = self._get_certbot_command()
+            test_cmd = certbot_cmd + ["plugins"]
+            test_result = subprocess.run(test_cmd, capture_output=True, text=True, timeout=10)
+            
+            if test_result.returncode == 0 and self.provider.CERTBOT_PLUGIN in test_result.stdout:
+                print(f"✓ Plugin {self.provider.CERTBOT_PLUGIN} is available in certbot")
+                return True
+            else:
+                print(f"Warning: {self.provider.CERTBOT_PLUGIN} plugin not found in certbot plugins list")
+                if test_result.stderr:
+                    print(f"Plugin test stderr: {test_result.stderr}")
+                
+                # Debug plugin registration
+                self._debug_plugin_registration()
+                
+                # Try force reinstall to fix plugin registration
+                print("Attempting to fix plugin registration...")
+                try:
+                    force_cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", 
+                               "--no-deps", self.provider.CERTBOT_PACKAGE]
+                    print(f"Running: {' '.join(force_cmd)}")
+                    force_result = subprocess.run(force_cmd, capture_output=True, text=True)
+                    
+                    if force_result.returncode == 0:
+                        # Test again after reinstall
+                        retest_cmd = certbot_cmd + ["plugins"]
+                        retest_result = subprocess.run(retest_cmd, capture_output=True, text=True, timeout=10)
+                        if retest_result.returncode == 0 and self.provider.CERTBOT_PLUGIN in retest_result.stdout:
+                            print(f"✓ Plugin registration fixed after reinstall")
+                            return True
+                        else:
+                            print(f"Plugin still not registered, may work anyway")
+                    else:
+                        print(f"Force reinstall failed: {force_result.stderr}")
+                except Exception as fix_error:
+                    print(f"Plugin fix attempt failed: {fix_error}")
+                
+                # Continue anyway - may work in Docker environments
+                return True
+        
         except Exception as e:
             print(f"Plugin verification warning: {e}")
             return True
@@ -158,7 +154,6 @@ class CertManager:
 
     def _ensure_certbot_in_env(self) -> None:
         """Ensure certbot is installed in the current Python environment."""
-        import sys
         
         # Try to import certbot to check if it's installed
         try:
@@ -185,8 +180,6 @@ class CertManager:
     
     def _get_certbot_command(self) -> List[str]:
         """Get the correct certbot command that uses the same Python environment."""
-        import sys
-        import os
         
         # Always use certbot from the same Python environment
         python_dir = os.path.dirname(sys.executable)
@@ -221,22 +214,22 @@ class CertManager:
                 for ep in entry_points:
                     print(f"  - {ep.name}: {ep.module_name}")
                 
-                # Look specifically for dns-namecheap
-                namecheap_eps = [ep for ep in entry_points if ep.name == 'dns-namecheap']
-                if namecheap_eps:
-                    print(f"✓ Found dns-namecheap entry point: {namecheap_eps[0]}")
+                # Look specifically for our plugin
+                plugin_eps = [ep for ep in entry_points if ep.name == self.provider.CERTBOT_PLUGIN]
+                if plugin_eps:
+                    print(f"✓ Found {self.provider.CERTBOT_PLUGIN} entry point: {plugin_eps[0]}")
                 else:
-                    print(f"✗ dns-namecheap entry point not found")
+                    print(f"✗ {self.provider.CERTBOT_PLUGIN} entry point not found")
             except Exception as ep_error:
                 print(f"Entry point check failed: {ep_error}")
             
             # Check if certbot can import the plugin module
             try:
-                from certbot_dns_namecheap import dns_namecheap
+                imported_module = __import__(self.provider.CERTBOT_PLUGIN_MODULE)
                 print(f"✓ Plugin module can be imported")
                 
                 # Check if it has the right class
-                if hasattr(dns_namecheap, 'Authenticator'):
+                if hasattr(imported_module, 'Authenticator'):
                     print(f"✓ Authenticator class found")
                 else:
                     print(f"✗ Authenticator class not found")
