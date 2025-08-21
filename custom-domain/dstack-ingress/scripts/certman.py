@@ -10,6 +10,7 @@ from typing import List, Optional, Tuple
 # Add script directory to path to import dns_providers
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from .dns_providers.base import DNSProvider
 from dns_providers import DNSProviderFactory
 
 
@@ -238,27 +239,6 @@ class CertManager:
         except Exception as debug_error:
             print(f"Debug failed: {debug_error}")
     
-    def _validate_provider_credentials(self) -> bool:
-        """Validate provider credentials by testing API access."""
-        print(f"Validating {self.provider_type} API credentials...")
-        
-        try:
-            # For Namecheap, test API access
-            if hasattr(self.provider, '_make_request'):
-                test_result = self.provider._make_request("namecheap.users.getBalances")
-                if test_result.get("success", False):
-                    print(f"✓ {self.provider_type} API credentials are valid")
-                    return True
-                else:
-                    print(f"✗ {self.provider_type} API validation failed: {test_result.get('errors', ['Unknown error'])}")
-                    return False
-            else:
-                print(f"No API validation available for {self.provider_type}, skipping")
-                return True
-        except Exception as e:
-            print(f"Error validating {self.provider_type} credentials: {e}")
-            return False
-    
     def setup_credentials(self) -> bool:
         """Setup credentials file for certbot using provider implementation."""
         result = self.provider.setup_certbot_credentials()
@@ -304,7 +284,7 @@ class CertManager:
             return False
         
         # Validate credentials before proceeding
-        if not self._validate_provider_credentials():
+        if not self.provider.validate_credentials():
             print(f"Failed to validate credentials for {self.provider_type}", file=sys.stderr)
             return False
         

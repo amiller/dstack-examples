@@ -52,6 +52,23 @@ class NamecheapDNSProvider(DNSProvider):
             print(f"Error setting up credentials file: {e}")
             return False
 
+    def validate_credentials(self) -> bool:
+        """Validate Namecheap API credentials by testing API access."""
+        print(f"Validating Namecheap API credentials...")
+        
+        try:
+            # Test API access with getBalances command
+            test_result = self._make_request("namecheap.users.getBalances")
+            if test_result.get("success", False):
+                print(f"✓ Namecheap API credentials are valid")
+                return True
+            else:
+                print(f"✗ Namecheap API validation failed: {test_result.get('errors', ['Unknown error'])}")
+                return False
+        except Exception as e:
+            print(f"Error validating Namecheap credentials: {e}")
+            return False
+
     def _make_request(self, command: str, **params) -> Dict:
         """Make a request to the Namecheap API with error handling."""
         # Base parameters required for all Namecheap API calls
