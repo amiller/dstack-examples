@@ -107,7 +107,14 @@ set_txt_record() {
     local APP_ID
 
     # Generate a unique app ID if not provided
-    APP_ID=${APP_ID:-$(curl -s --unix-socket /var/run/tappd.sock http://localhost/prpc/Tappd.Info | jq -j '.app_id')}
+    if [[ -e /var/run/dstack.sock ]]; then
+        DSTACK_APP_ID=$(curl -s --unix-socket /var/run/dstack.sock http://localhost/Info | jq -j .app_id)
+        export DSTACK_APP_ID
+    else
+        DSTACK_APP_ID=$(curl -s --unix-socket /var/run/tappd.sock http://localhost/prpc/Tappd.Info | jq -j .app_id)
+        export DSTACK_APP_ID
+    fi
+    APP_ID=${APP_ID:-"$DSTACK_APP_ID"}
 
     # Use the unified DNS manager to set the TXT record
     source /opt/app-venv/bin/activate

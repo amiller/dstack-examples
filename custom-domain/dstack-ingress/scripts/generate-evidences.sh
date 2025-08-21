@@ -19,7 +19,11 @@ while [ ${#PADDED_HASH} -lt 128 ]; do
 done
 QUOTED_HASH="${PADDED_HASH}"
 
-curl -s --unix-socket /var/run/tappd.sock "http://localhost/prpc/Tappd.RawQuote?report_data=${QUOTED_HASH}" > quote.json
+if [[ -e /var/run/dstack.sock ]]; then
+    curl -s --unix-socket /var/run/dstack.sock "http://localhost/prpc/GetQuote?report_data=${QUOTED_HASH}" > quote.json
+else
+    curl -s --unix-socket /var/run/tappd.sock "http://localhost/prpc/Tappd.RawQuote?report_data=${QUOTED_HASH}" > quote.json
+fi
 if [ $? -ne 0 ]; then
     echo "Error: Failed to generate evidences"
     exit 1
