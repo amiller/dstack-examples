@@ -27,3 +27,13 @@ Set these encrypted environment variables:
 - `DSTACK_AWS_REGION` - AWS region for your ECR repository
 - `DSTACK_AWS_ECR_REGISTRY` - Your AWS ECR registry URL
 - `DSTACK_AWS_SESSION_TOKEN` - Only needed for temporary AWS credentials
+
+## Dstack App Related
+
+The following three environment variables will be automatically added by the default pre-launch script from Phala Cloud:
+
+- `DSTACK_APP_ID`: The unique identifier for the Dstack App.
+- `DSTACK_GATEWAY_DOMAIN`: The gateway domain for accessing the Dstack App.
+- `DSTACK_APP_DOMAIN`: The default domain of the Dstack App.
+
+NOTE: `DSTACK_APP_DOMAIN` equals to `${DSTACK_APP_ID}.${DSTACK_GATEWAY_DOMAIN}`, which acccessing port 80. It equals to `${DSTACK_APP_ID}-80.${DSTACK_GATEWAY_DOMAIN}`.
