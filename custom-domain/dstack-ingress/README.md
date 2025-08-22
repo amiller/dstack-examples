@@ -76,6 +76,7 @@ services:
       - SET_CAA=true
       - TARGET_ENDPOINT=http://app:80
     volumes:
+      - /var/run/dstack.sock:/var/run/dstack.sock
       - /var/run/tappd.sock:/var/run/tappd.sock
       - cert-data:/etc/letsencrypt
     restart: unless-stopped
@@ -146,6 +147,7 @@ services:
       - SET_CAA=true
       - TARGET_ENDPOINT=grpc://app:50051
     volumes:
+      - /var/run/dstack.sock:/var/run/dstack.sock
       - /var/run/tappd.sock:/var/run/tappd.sock
       - cert-data:/etc/letsencrypt
     restart: unless-stopped
