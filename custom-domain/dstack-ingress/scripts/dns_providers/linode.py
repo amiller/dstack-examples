@@ -16,6 +16,7 @@ class LinodeDNSProvider(DNSProvider):
 
     # Certbot configuration
     CERTBOT_PLUGIN = "dns-linode"
+    CERTBOT_PLUGIN_MODULE = "certbot_dns_linode"
     CERTBOT_PACKAGE = "certbot-dns-linode"
     CERTBOT_PROPAGATION_SECONDS = 300
     CERTBOT_CREDENTIALS_FILE = "~/.linode/credentials.ini"

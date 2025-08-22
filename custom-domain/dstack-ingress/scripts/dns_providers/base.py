@@ -52,6 +52,7 @@ class DNSProvider(ABC):
 
     # Certbot configuration - override in subclasses
     CERTBOT_PLUGIN = ""
+    CERTBOT_PLUGIN_MODULE = ""
     CERTBOT_PACKAGE = ""
     CERTBOT_PROPAGATION_SECONDS = 120
     CERTBOT_CREDENTIALS_FILE = ""  # Path to credentials file
@@ -63,6 +64,10 @@ class DNSProvider(ABC):
     def setup_certbot_credentials(self) -> bool:
         """Setup credentials file for certbot. Override in subclasses if needed."""
         return True  # Default: no setup needed
+
+    def validate_credentials(self) -> bool:
+        """Validate provider credentials. Override in subclasses if needed."""
+        return True  # Default: no validation needed
 
     @classmethod
     def suitable(cls) -> bool:

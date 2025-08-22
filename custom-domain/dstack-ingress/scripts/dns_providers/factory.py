@@ -5,6 +5,7 @@ from typing import Optional
 from .base import DNSProvider
 from .cloudflare import CloudflareDNSProvider
 from .linode import LinodeDNSProvider
+from .namecheap import NamecheapDNSProvider
 
 
 class DNSProviderFactory:
@@ -13,6 +14,7 @@ class DNSProviderFactory:
     PROVIDERS = {
         "cloudflare": CloudflareDNSProvider,
         "linode": LinodeDNSProvider,
+        "namecheap": NamecheapDNSProvider,
     }
 
     @classmethod

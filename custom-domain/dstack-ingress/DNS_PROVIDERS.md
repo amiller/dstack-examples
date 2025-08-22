@@ -6,6 +6,7 @@ This guide explains how to configure dstack-ingress to work with different DNS p
 
 - **Cloudflare** - The original and default provider
 - **Linode DNS** - For Linode-hosted domains
+- **Namecheap** - For Namecheap-hosted domains
 
 ## Environment Variables
 
@@ -15,7 +16,7 @@ This guide explains how to configure dstack-ingress to work with different DNS p
 - `GATEWAY_DOMAIN` - dstack gateway domain (e.g., `_.dstack-prod5.phala.network`)
 - `CERTBOT_EMAIL` - Email for Let's Encrypt registration
 - `TARGET_ENDPOINT` - Backend application endpoint to proxy to
-- `DNS_PROVIDER` - DNS provider to use (`cloudflare`, `linode`)
+- `DNS_PROVIDER` - DNS provider to use (`cloudflare`, `linode`, `namecheap`)
 
 ### Optional Variables
 
@@ -53,7 +54,28 @@ LINODE_API_TOKEN=your-api-token
 - If resolution fails, it falls back to CNAME (but CAA records won't work on that subdomain)
 - This is a Linode-specific limitation not present in other providers
 
-## Docker Compose Example
+### Namecheap
+
+```bash
+DNS_PROVIDER=namecheap
+NAMECHEAP_USERNAME=your-username
+NAMECHEAP_API_KEY=your-api-key
+NAMECHEAP_CLIENT_IP=your-client-ip
+```
+
+**Required Credentials:**
+- `NAMECHEAP_USERNAME` - Your Namecheap account username
+- `NAMECHEAP_API_KEY` - Your Namecheap API key (from https://ap.www.namecheap.com/settings/tools/apiaccess/)
+- `NAMECHEAP_CLIENT_IP` - The IP address of the node (required for Namecheap API authentication)
+
+**Important Notes for Namecheap:**
+- Namecheap API requires node IP address for authentication, and you need add it to whitelist IP first.
+- Namecheap doesn't support CAA records through their API currently
+- The certbot plugin uses the format `certbot-dns-namecheap` package
+
+## Docker Compose Examples
+
+### Linode Example
 
 ```yaml
 version: '3.8'
@@ -73,6 +95,33 @@ services:
 
       # Linode specific
       - LINODE_API_TOKEN=your-api-token
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - ./evidences:/evidences
+```
+
+### Namecheap Example
+
+```yaml
+version: '3.8'
+
+services:
+  ingress:
+    image: dstack-ingress:latest
+    ports:
+      - "443:443"
+    environment:
+      # Common configuration
+      - DNS_PROVIDER=namecheap
+      - DOMAIN=app.example.com
+      - GATEWAY_DOMAIN=_.dstack-prod5.phala.network
+      - CERTBOT_EMAIL=admin@example.com
+      - TARGET_ENDPOINT=http://backend:8080
+
+      # Namecheap specific
+      - NAMECHEAP_USERNAME=your-username
+      - NAMECHEAP_API_KEY=your-api-key
+      - NAMECHEAP_CLIENT_IP=your-public-ip
     volumes:
       - ./letsencrypt:/etc/letsencrypt
       - ./evidences:/evidences
@@ -112,3 +161,9 @@ Ensure your API tokens/credentials have the necessary permissions listed above f
 1. Go to https://cloud.linode.com/profile/tokens
 2. Create a Personal Access Token
 3. Grant "Domains" Read/Write access
+
+### Namecheap
+1. Go to https://ap.www.namecheap.com/settings/tools/api-access/
+2. Enable API access for your account
+3. Note down your API key and username
+4. Make sure your IP address is whitelisted in the API settings

@@ -5,18 +5,14 @@ set -e
 PORT=${PORT:-443}
 TXT_PREFIX=${TXT_PREFIX:-"_tapp-address"}
 
-echo "Setting up Python environment"
+echo "Setting up certbot environment"
 
-setup_py_env() {
-    if [ ! -d "/opt/app-venv" ]; then
-        python3 -m venv --system-site-packages /opt/app-venv
-    fi
+setup_certbot_env() {
+    # Activate the pre-built virtual environment
     source /opt/app-venv/bin/activate
 
-    pip install requests
-
     # Use the unified certbot manager to install plugins and setup credentials
-    echo "Setting up certbot environment"
+    echo "Installing DNS plugins and setting up credentials"
     certman.py setup
     if [ $? -ne 0 ]; then
         echo "Error: Failed to setup certbot environment"
@@ -156,8 +152,8 @@ bootstrap() {
 
 # Credentials are now handled by certman.py setup
 
-# Setup Python environment and install dependencies first
-setup_py_env
+# Setup certbot environment (venv is already created in Dockerfile)
+setup_certbot_env
 
 # Check if it's the first time the container is started
 if [ ! -f "/.bootstrapped" ]; then

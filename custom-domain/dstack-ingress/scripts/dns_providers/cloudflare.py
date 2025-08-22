@@ -15,6 +15,7 @@ class CloudflareDNSProvider(DNSProvider):
 
     # Certbot configuration
     CERTBOT_PLUGIN = "dns-cloudflare"
+    CERTBOT_PLUGIN_MODULE = "certbot_dns_cloudflare"
     CERTBOT_PACKAGE = "certbot-dns-cloudflare==4.0.0"
     CERTBOT_PROPAGATION_SECONDS = 120
     CERTBOT_CREDENTIALS_FILE = "~/.cloudflare/cloudflare.ini"
