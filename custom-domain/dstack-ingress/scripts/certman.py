@@ -10,7 +10,7 @@ from typing import List, Optional, Tuple
 # Add script directory to path to import dns_providers
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from dns_providers.base import DNSProvider
+
 from dns_providers import DNSProviderFactory
 
 
