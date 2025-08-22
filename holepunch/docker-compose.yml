@@ -1,0 +1,115 @@
+services:
+  echo:
+    image: python:3.11-slim
+    ports:
+      - 8080:8080
+    command: |
+      bash -c '
+      pip install flask pystun3 &&
+      export PYTHONUNBUFFERED=1 &&
+      cat > /tmp/echo.py << "EOF"
+      import socket, threading, stun, time
+      from flask import Flask, request, jsonify
+      app = Flask(__name__)
+      udp_socket = None
+      external_ip = None
+      external_port = None
+      echo_thread = None
+      stop_echo = False
+      punch_received = False
+      last_message_time = 0
+      socket_verified_time = 0
+      STUN_SERVERS = ["stun.cloudflare.com", "stun1.l.google.com", "stun.nextcloud.com", "stun.l.google.com"]
+      def echo_loop():
+          global udp_socket, stop_echo, punch_received, last_message_time
+          while not stop_echo:
+              try:
+                  data, addr = udp_socket.recvfrom(1024)
+                  try:
+                      message = data.decode()
+                      last_message_time = time.time()
+                      print(f"UDP service received from {addr}: {message}")
+                      if message.startswith("PUNCH"):
+                          if not punch_received:
+                              print(f"✓ First PUNCH packet received from {addr} - stopping hello packets")
+                              punch_received = True
+                      else:
+                          response = f"ECHO: {message}"
+                          udp_socket.sendto(response.encode(), addr)
+                          print(f"UDP service sent to {addr}: {response}")
+                  except UnicodeDecodeError:
+                      last_message_time = time.time()
+              except:
+                  break
+      def create_socket():
+          global udp_socket
+          udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          udp_socket.bind(("0.0.0.0",43000))
+      def stun_discover():
+          global external_ip, external_port
+          for server in STUN_SERVERS:
+              try:
+                  stun.STUN_SERVERS = [(server, 19302 if "google" in server else 3478)]
+                  _, external_ip, external_port = stun.get_ip_info(source_port=43000)
+                  if external_ip and external_port:
+                      print(f"STUN discovered via {server}: {external_ip}:{external_port}")
+                      return external_ip, external_port
+              except Exception as e:
+                  print(f"STUN server {server} failed: {e}")
+          print("All STUN servers failed")
+          return None, None
+      def send_hello_packets(client_ip, client_port):
+          global punch_received
+          print(f"Sending hello packets to {client_ip}:{client_port}")
+          for i in range(5):
+              if punch_received:
+                  print(f"Punch received - stopping hello packets after {i} packets")
+                  break
+              try:
+                  hello_msg = f"HELLO from echo service, packet {i+1}"
+                  udp_socket.sendto(hello_msg.encode(), (client_ip, client_port))
+                  print(f"Sent hello packet {i+1} to {client_ip}:{client_port}")
+                  time.sleep(1)
+              except Exception as e:
+                  print(f"Hello packet {i+1} error: {e}")
+      @app.route("/get_echo_service", methods=["POST"])
+      def get_echo_service():
+          global punch_received, last_message_time, socket_verified_time, external_ip, external_port, stop_echo, echo_thread
+          current_time = time.time()
+          if last_message_time > 0 and (current_time - last_message_time) > 30:
+              if (current_time - socket_verified_time) > 30:
+                  print(f"No UDP messages for {current_time - last_message_time:.1f}s - rebuilding socket")
+                  stop_echo = True
+                  if echo_thread and echo_thread.is_alive():
+                      echo_thread.join(timeout=1)
+                  if udp_socket:
+                      udp_socket.close()
+                  create_socket()
+                  stun_discover()
+                  socket_verified_time = current_time
+                  punch_received = False
+                  stop_echo = False
+                  echo_thread = threading.Thread(target=echo_loop, daemon=True)
+                  echo_thread.start()
+                  print(f"Socket rebuilt - new endpoint: {external_ip}:{external_port}")
+          data = request.get_json()
+          client_ip = data.get("client_ip")
+          client_port = data.get("client_port")
+          if client_port:
+              punch_received = False
+              hello_thread = threading.Thread(target=send_hello_packets, args=(client_ip, client_port), daemon=True)
+              hello_thread.start()
+          return jsonify({"udp_service": {"ip": external_ip, "port": external_port}})
+      create_socket()
+      if not stun_discover():
+          print("STUN discovery failed - cannot start echo service without external endpoint")
+          exit(1)
+      socket_verified_time = time.time()
+      print(f"Echo service registered at {external_ip}:{external_port}")
+      echo_thread = threading.Thread(target=echo_loop, daemon=True)
+      echo_thread.start()
+      app.run(host="0.0.0.0", port=8080)
+      EOF
+      python /tmp/echo.py
+      '
