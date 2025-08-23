@@ -3,7 +3,11 @@
 set -e
 
 PORT=${PORT:-443}
-TXT_PREFIX=${TXT_PREFIX:-"_tapp-address"}
+if [[ -e /var/run/dstack.sock ]]; then
+  TXT_PREFIX=${TXT_PREFIX:-"_dstack-app-address"}
+else
+  TXT_PREFIX=${TXT_PREFIX:-"_tapp-address"}
+fi
 
 echo "Setting up certbot environment"
 
