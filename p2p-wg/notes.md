@@ -1,0 +1,303 @@
+Understood. Here’s a **zero-config docker-compose** that does what you want:
+
+* Hardcodes your **Gist**.
+* Generates WG keys on first run.
+* **Does not** hash the pubkey for overlay. Instead, it **derives overlay IPs from the index in the Gist’s `peers` list**.
+* Identifies “self” by **matching our WG pubkey** against each fetched `/node.json`.
+* Serves `/node.json` with WG pubkey + STUN-observed `public_ip:public_port`.
+* Polls the Gist and each peer’s `/node.json`; if a peer’s public endpoint changes, it updates `wg set … endpoint …`.
+* If **our index changes** (because list order changed), it **reassigns** our overlay IP and refreshes peer configs.
+
+Paste this as `docker-compose.yml` and run `docker compose up -d` on each host.
+
+```yaml
+version: "3.8"
+
+services:
+  node:
+    image: python:3.11-slim
+    container_name: p2pnode
+    restart: unless-stopped
+    cap_add: [ "NET_ADMIN", "SYS_MODULE" ]
+    devices: [ "/dev/net/tun:/dev/net/tun" ]
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv4.conf.all.src_valid_mark: "1"
+    ports:
+      - "8080:8080"  # publishes /node.json
+    command: >
+      bash -lc '
+        set -euo pipefail
+        apt-get update &&
+        apt-get install -y --no-install-recommends wireguard-tools iproute2 curl ca-certificates iputils-ping python3-venv &&
+        python -m venv /venv && . /venv/bin/activate &&
+        pip install --no-cache-dir pystun3 requests &&
+        mkdir -p /app &&
+        cat > /app/node.py << "PY"
+import json, os, time, threading, subprocess, http.server
+from datetime import datetime, timezone
+import requests, stun
+
+# -------- Config (hardcoded) --------
+GIST_URL   = "https://gist.githubusercontent.com/amiller/465888c57bfce42dd06f5cb052ea206c/raw/urls.json"
+HTTP_BIND  = "0.0.0.0:8080"
+WG_IFACE   = "wg0"
+WG_PORT    = 51820
+SUBNET_STR = "10.88.0.0/24"   # overlay subnet
+BASE_OCTET = 10               # offset so .1..9 are free; host = BASE_OCTET + index
+
+# -------- State --------
+LOCK = threading.Lock()
+STATE = {
+  "wg_pubkey": "",
+  "overlay_ip": "",          # our /32 once known (from index)
+  "self_index": None,        # our index in Gist
+  "wg_listen_port": WG_PORT,
+  "public_ip": None,
+  "public_port": None,
+  "nat": None,
+  "updated_at": "",
+  "self_url": None,
+}
+PEERS_JSON = {}              # url -> node.json
+PEER_ENDPOINTS = {}          # peer_pub -> "ip:port" last set
+PEER_INDEX = {}              # peer_pub -> index (from Gist)
+
+def sh(*args, check=True):
+    p = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if check and p.returncode != 0:
+        raise RuntimeError(f"cmd failed: {' '.join(args)}\\n{p.stderr}")
+    return p.stdout.strip()
+
+def ensure_keys():
+    os.makedirs("/etc/wireguard", exist_ok=True)
+    keyfile = "/etc/wireguard/privatekey"
+    if not os.path.exists(keyfile):
+        priv = sh("wg", "genkey")
+        with open(keyfile, "w") as f: f.write(priv+"\\n")
+        os.chmod(keyfile, 0o600)
+    priv = open(keyfile).read().strip()
+    pub  = sh("bash","-lc", f"echo {priv} | wg pubkey")
+    return priv, pub
+
+def ensure_wg_iface(priv):
+    # create iface and set key/port; do NOT assign IP until index known
+    try:
+        sh("ip","link","show", WG_IFACE)
+    except:
+        sh("ip","link","add", WG_IFACE, "type", "wireguard")
+    keyfile = "/etc/wireguard/privatekey"
+    with open(keyfile,"w") as f: f.write(priv+"\\n")
+    os.chmod(keyfile, 0o600)
+    sh("wg","set", WG_IFACE, "private-key", keyfile, "listen-port", str(WG_PORT))
+    sh("ip","link","set","up","dev", WG_IFACE)
+
+def current_overlay_ip():
+    out = sh("ip","-o","addr","show","dev", WG_IFACE, check=False)
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and parts[2] == "inet":
+            return parts[3]  # e.g. 10.88.0.X/32
+    return None
+
+def ip_for_index(i: int) -> str:
+    # 10.88.0.(BASE_OCTET + i)/32 ; avoid collisions with .0/.255
+    host = BASE_OCTET + i
+    if host <= 1: host = 10
+    if host >= 254: host = 200
+    return f"10.88.0.{host}/32"
+
+def ensure_overlay_addr(desired_cidr: str):
+    cur = current_overlay_ip()
+    if cur == desired_cidr:
+        return
+    # remove any existing /32 on wg0 from 10.88.0.0/24
+    if cur and cur.endswith("/32") and cur.startswith("10.88.0."):
+        sh("ip","addr","del", cur, "dev", WG_IFACE, check=False)
+    # add desired
+    sh("ip","addr","add", desired_cidr, "dev", WG_IFACE, check=False)
+    print(f"[wg] overlay set to {desired_cidr}", flush=True)
+
+def wg_set_peer(pub: str, allowed_cidr: str, endpoint: str, keepalive: int=25):
+    args = ["wg","set", WG_IFACE, "peer", pub, "allowed-ips", allowed_cidr]
+    if endpoint:
+        args += ["endpoint", endpoint]
+    if keepalive > 0:
+        args += ["persistent-keepalive", str(keepalive)]
+    sh(*args)
+
+def now_iso(): return datetime.now(timezone.utc).isoformat()
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path.startswith("/node.json"):
+            with LOCK:
+                body = {
+                    "wg_pubkey": STATE["wg_pubkey"],
+                    "overlay_ip": STATE["overlay_ip"],       # convenient echo; derived from index
+                    "wg_listen_port": STATE["wg_listen_port"],
+                    "public_ip": STATE["public_ip"],
+                    "public_port": STATE["public_port"],
+                    "nat": STATE["nat"],
+                    "updated_at": STATE["updated_at"],
+                    "self_url": STATE["self_url"],
+                    "self_index": STATE["self_index"],
+                }
+            b = json.dumps(body).encode()
+            self.send_response(200); self.send_header("content-type","application/json")
+            self.send_header("content-length", str(len(b))); self.end_headers(); self.wfile.write(b)
+        elif self.path == "/healthz":
+            self.send_response(200); self.end_headers(); self.wfile.write(b"ok")
+        else:
+            self.send_response(404); self.end_headers()
+    def log_message(self, *a): return
+
+def run_http():
+    host, port = HTTP_BIND.split(":")
+    http.server.ThreadingHTTPServer((host, int(port)), Handler).serve_forever()
+
+def fetch_json(url, timeout=5):
+    r = requests.get(url, timeout=timeout)
+    r.raise_for_status()
+    return r.json()
+
+def stun_loop():
+    while True:
+        try:
+            nat, ext_ip, ext_port = stun.get_ip_info(stun_host="stun.l.google.com", stun_port=19302)
+            with LOCK:
+                changed = (STATE["public_ip"],STATE["public_port"],STATE["nat"]) != (ext_ip,ext_port,nat)
+                STATE["public_ip"],STATE["public_port"],STATE["nat"] = ext_ip,ext_port,nat
+                STATE["updated_at"] = now_iso()
+            if changed:
+                print(f"[stun] {nat} {ext_ip}:{ext_port}", flush=True)
+        except Exception as e:
+            print(f"[stun] error: {e}", flush=True)
+        time.sleep(5)
+
+def reconfigure_from_gist(peers_list):
+    # 1) fetch each /node.json; build index->pubkey mapping; find self
+    index_pub = {}
+    pub_index = {}
+    docs = {}
+    for idx, url in enumerate(peers_list):
+        try:
+            doc = fetch_json(url)
+            docs[url] = doc
+            pub = doc.get("wg_pubkey")
+            if pub:
+                index_pub[idx] = pub
+                pub_index[pub] = idx
+        except Exception as e:
+            print(f"[peer] fetch {url}: {e}", flush=True)
+    with LOCK:
+        # remember docs
+        for u,d in docs.items():
+            PEERS_JSON[u] = d
+
+    # identify self by pubkey match
+    self_idx = None
+    with LOCK:
+        mypub = STATE["wg_pubkey"]
+    for idx, url in enumerate(peers_list):
+        doc = docs.get(url)
+        if doc and doc.get("wg_pubkey") == mypub:
+            self_idx = idx
+            with LOCK:
+                STATE["self_url"] = url
+            break
+
+    # set overlay by self index (if known)
+    if self_idx is not None:
+        desired = ip_for_index(self_idx)
+        ensure_overlay_addr(desired)
+        with LOCK:
+            STATE["self_index"] = self_idx
+            STATE["overlay_ip"] = desired
+    else:
+        # no overlay yet; bail on peer config until we know our own address
+        return
+
+    # 2) for each peer, compute overlay from its index; set AllowedIPs and endpoint
+    for idx, url in enumerate(peers_list):
+        doc = docs.get(url)
+        if not doc: 
+            continue
+        pub = doc.get("wg_pubkey")
+        if not pub or pub == mypub:
+            continue
+        peer_overlay = ip_for_index(idx)
+        PEER_INDEX[pub] = idx
+        pip, pport = doc.get("public_ip"), doc.get("public_port")
+        endpoint = f"{pip}:{pport}" if pip and pport else ""
+        try:
+            wg_set_peer(pub, peer_overlay, endpoint, keepalive=25 if endpoint else 0)
+            if endpoint:
+                PEER_ENDPOINTS[pub] = endpoint
+                print(f"[wg] peer {pub[:8]} idx {idx} overlay {peer_overlay} -> {endpoint}", flush=True)
+            else:
+                print(f"[wg] peer {pub[:8]} idx {idx} overlay {peer_overlay} (no endpoint yet)", flush=True)
+        except Exception as e:
+            print(f"[wg] set err ({pub[:8]}): {e}", flush=True)
+
+def gist_loop():
+    last_urls = None
+    while True:
+        try:
+            listing = fetch_json(GIST_URL)
+            urls = listing.get("peers") if isinstance(listing, dict) else (listing if isinstance(listing, list) else [])
+            # only recompute if list changed OR periodically
+            if urls != last_urls or int(time.time()) % 30 == 0:
+                reconfigure_from_gist(urls)
+                last_urls = urls
+            # refresh endpoints if peers changed their public port/ip
+            for url, doc in list(PEERS_JSON.items()):
+                try:
+                    newdoc = fetch_json(url)
+                except Exception:
+                    continue
+                if newdoc != doc:
+                    PEERS_JSON[url] = newdoc
+                    pub = newdoc.get("wg_pubkey")
+                    if not pub or pub == STATE["wg_pubkey"]:
+                        continue
+                    pip, pport = newdoc.get("public_ip"), newdoc.get("public_port")
+                    endpoint = f"{pip}:{pport}" if pip and pport else ""
+                    idx = PEER_INDEX.get(pub)
+                    overlay = ip_for_index(idx) if idx is not None else None
+                    if endpoint and overlay:
+                        prev = PEER_ENDPOINTS.get(pub)
+                        if prev != endpoint:
+                            try:
+                                wg_set_peer(pub, overlay, endpoint, keepalive=25)
+                                PEER_ENDPOINTS[pub] = endpoint
+                                print(f"[wg] endpoint update {pub[:8]} -> {endpoint}", flush=True)
+                            except Exception as e:
+                                print(f"[wg] endpoint update err: {e}", flush=True)
+        except Exception as e:
+            print(f"[gist] error: {e}", flush=True)
+        time.sleep(5)
+
+def main():
+    priv, pub = ensure_keys()
+    ensure_wg_iface(priv)  # key+port only; overlay set after we learn our index
+    with LOCK:
+        STATE["wg_pubkey"] = pub
+        STATE["updated_at"] = now_iso()
+    threading.Thread(target=run_http, daemon=True).start()
+    threading.Thread(target=stun_loop, daemon=True).start()
+    threading.Thread(target=gist_loop, daemon=True).start()
+    while True: time.sleep(3600)
+
+if __name__ == "__main__":
+    main()
+PY
+        exec /venv/bin/python /app/node.py
+      '
+```
+
+### Notes
+
+* Overlay IPs: `10.88.0.(10 + index)/32`. Index is the position in the Gist’s `peers` array. If you reorder the list, everyone will reassign—expect churn. Freeze the order once stable.
+* Identification: we scan each URL in `peers`, fetch `/node.json`, and mark “self” when the **WG pubkey** matches ours. That’s the robust way to “recognise our own” node.
+* This stays intentionally simple. It will break on strict/symmetric NATs since STUN’s mapping is for its own socket, not WireGuard’s. If you need reliability later, add simultaneous-open or a tiny UDP relay.
