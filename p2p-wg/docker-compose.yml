@@ -38,29 +38,20 @@ services:
       import json, os, time, threading, subprocess, http.server
       from datetime import datetime, timezone
       import requests, stun
-      # -------- Config (hardcoded) --------
-      GIST_URL   = "https://gist.githubusercontent.com/amiller/465888c57bfce42dd06f5cb052ea206c/raw/urls.json"
-      HTTP_BIND  = "0.0.0.0:8080"
-      WG_IFACE   = "wg0"
-      WG_PORT    = 51820
-      SUBNET_STR = "10.88.0.0/24"   # overlay subnet
-      BASE_OCTET = 10               # offset so .1..9 are free; host = BASE_OCTET + index
-      # -------- State --------
+      GIST_URL = "https://gist.githubusercontent.com/amiller/465888c57bfce42dd06f5cb052ea206c/raw/urls.json"
+      HTTP_BIND = "0.0.0.0:8080"
+      WG_IFACE = "wg0"
+      WG_PORT = 51820
+      BASE_OCTET = 10
       LOCK = threading.Lock()
       STATE = {
-        "wg_pubkey": "",
-        "overlay_ip": "",          # our /32 once known (from index)
-        "self_index": None,        # our index in Gist
-        "wg_listen_port": WG_PORT,
-        "public_ip": None,
-        "public_port": None,
-        "nat": None,
-        "updated_at": "",
-        "self_url": None,
+        "wg_pubkey": "", "overlay_ip": "", "self_index": None,
+        "wg_listen_port": WG_PORT, "public_ip": None, "public_port": None,
+        "nat": None, "updated_at": "", "self_url": None,
       }
-      PEERS_JSON = {}              # url -> node.json
-      PEER_ENDPOINTS = {}          # peer_pub -> "ip:port" last set
-      PEER_INDEX = {}              # peer_pub -> index (from Gist)
+      PEERS_JSON = {}
+      PEER_ENDPOINTS = {}
+      PEER_INDEX = {}
       def sh(cmd, check=True, input=None):
           p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, input=input)
           if check and p.returncode != 0:
@@ -69,124 +60,64 @@ services:
       def ensure_keys():
           os.makedirs("/etc/wireguard", exist_ok=True)
           keyfile = "/etc/wireguard/privatekey"
-          if os.path.exists(keyfile):
-              os.remove(keyfile)
-          if not os.path.exists(keyfile):
-              priv = sh("wg genkey")
-              with open(keyfile, "w") as f: 
-                  f.write(priv + "\n")
-              os.chmod(keyfile, 0o600)
-          priv = open(keyfile).read().strip()
-          pub = sh("wg pubkey", input=priv + "\n")
-          return priv, pub
-      def ensure_wg_iface(priv):
-          # create iface and set key/port; do NOT assign IP until index known
-          try:
-              sh(f"ip link show {WG_IFACE}")
-          except:
-              sh(f"ip link add {WG_IFACE} type wireguard")
-          keyfile = "/etc/wireguard/privatekey"
-          with open(keyfile,"w") as f: f.write(priv+"\n")
+          if os.path.exists(keyfile): os.remove(keyfile)
+          priv = sh("wg genkey")
+          with open(keyfile, "w") as f: f.write(priv + "\n")
           os.chmod(keyfile, 0o600)
+          return priv, sh("wg pubkey", input=priv + "\n")
+
+      def ensure_wg_iface(priv):
+          try: sh(f"ip link show {WG_IFACE}")
+          except: sh(f"ip link add {WG_IFACE} type wireguard")
           sh(f"wg set {WG_IFACE} listen-port {WG_PORT}")
           sh(f"wg set {WG_IFACE} private-key /dev/stdin", input=priv+"\n")
           sh(f"ip link set up dev {WG_IFACE}")
+
       def current_overlay_ip():
           out = sh(f"ip -o addr show dev {WG_IFACE}", check=False)
           for line in out.splitlines():
               parts = line.split()
-              if len(parts) >= 4 and parts[2] == "inet":
-                  return parts[3]  # e.g. 10.88.0.X/32
+              if len(parts) >= 4 and parts[2] == "inet": return parts[3]
           return None
+
       def ip_for_index(i: int) -> str:
-          # 10.88.0.(BASE_OCTET + i)/32 ; avoid collisions with .0/.255
           host = BASE_OCTET + i
           if host <= 1: host = 10
           if host >= 254: host = 200
           return f"10.88.0.{host}/32"
       def ensure_overlay_addr(desired_cidr: str):
           cur = current_overlay_ip()
-          if cur == desired_cidr:
-              return
-          # remove any existing /32 on wg0 from 10.88.0.0/24
+          if cur == desired_cidr: return
           if cur and cur.endswith("/32") and cur.startswith("10.88.0."):
               sh(f"ip addr del {cur} dev {WG_IFACE}", check=False)
-          # add desired
           sh(f"ip addr add {desired_cidr} dev {WG_IFACE}", check=False)
-          print(f"[wg] overlay set to {desired_cidr}", flush=True)
+
       def logs_status():
-          """Returns True if any peer has had a handshake in the last 3 minutes"""
           try:
               status = sh(f"wg show {WG_IFACE}")
+              transfer = sh(f"wg show {WG_IFACE} transfer")
+              for line in transfer.splitlines():
+                  if line.strip():
+                      peer, rx, tx = line.split()
+                      print(f"[wg] traffic rx={rx}B tx={tx}B", flush=True)
+                      if int(rx) > 0 or int(tx) > 0:
+                          return True
               for line in status.splitlines():
                   if "latest handshake:" in line.lower():
                       parts = line.lower().split("latest handshake:")[1].strip().split()
                       if "minute" in parts[1]:
-                          minutes = int(parts[0])
-                          return minutes < 3  # Consider connected if handshake within 3 minutes
+                          mins = int(parts[0])
+                          print(f"[wg] handshake {mins}m ago", flush=True)
               return False
-          except Exception:
-              return False
-
-      def wg_is_up():
-          """Check if WireGuard interface is up"""
-          try:
-              sh(f"ip link show {WG_IFACE}")
-              return True
-          except:
-              return False
+          except: return False
 
       def wg_down():
-          """Bring down WireGuard interface"""
-          if wg_is_up():
-              try:
-                  sh(f"ip link set down dev {WG_IFACE}")
-                  sh(f"ip link del {WG_IFACE}")
-              except Exception as e:
-                  print(f"[wg] down error: {e}", flush=True)
-
-      def wg_up(priv):
-          """Bring up WireGuard interface"""
-          ensure_wg_iface(priv)
-
-      def get_net_status():
-          """Get detailed network status including routing and interfaces"""
           try:
-              route = sh("ip route show")
-              addr = sh("ip addr show")
-              return "Network Status:\n--- Routes ---\n" + route + "\n--- Interfaces ---\n" + addr
-
-          except Exception as e:
-              return f"Error getting network status: {e}"
-
-      def get_wg_status():
-          """Get detailed WireGuard interface status including peer info"""
-          try:
-              # Get interface info
-              iface_info = sh(f"wg show {WG_IFACE}")
-              
-              # Get transfer stats
-              transfer = sh(f"wg show {WG_IFACE} transfer")
-              
-              # Get dump format (more machine readable)
-              dump = sh(f"wg show {WG_IFACE} dump")
-              
-              # Get interface IP
-              ip = sh(f"ip -o addr show {WG_IFACE}")
-              
-              return "\n".join([
-                  "WireGuard Status:",
-                  f"Interface: {WG_IFACE}",
-                  f"IP Config: {ip}",
-                  "--- Interface Info ---",
-                  iface_info,
-                  "--- Transfer Stats ---",
-                  transfer,
-                  "--- Dump Format ---",
-                  dump
-              ])
-          except Exception as e:
-              return f"Error getting WireGuard status: {e}"
+              sh(f"ip link show {WG_IFACE}")
+              sh(f"ip link set down dev {WG_IFACE}")
+              sh(f"ip link del {WG_IFACE}")
+          except:
+              pass
 
       def wg_set_peer(pub: str, allowed_cidr: str, endpoint: str, keepalive: int=25):
           cmd = f"wg set {WG_IFACE} peer {pub} allowed-ips {allowed_cidr}"
@@ -231,65 +162,33 @@ services:
       def do_stun_check():
           """Perform a single STUN check with WireGuard down"""
           try:
-              # Remember current WG state and use stored key
-              was_up = wg_is_up()
               with LOCK:
                   priv_key = STATE.get("wg_privkey")
-              if was_up:
-                  if not priv_key:
-                      print("[wg] No private key stored, cannot restore interface", flush=True)
-                      return False
+              if priv_key:
                   wg_down()
-                  time.sleep(1)  # Give OS time to release port
-              
-              # Do STUN check
+                  time.sleep(1)
               nat, ext_ip, ext_port = stun.get_ip_info(stun_host="stun.l.google.com", stun_port=19302, source_port=WG_PORT)
               with LOCK:
-                  changed = (STATE["public_ip"],STATE["public_port"],STATE["nat"]) != (ext_ip,ext_port,nat)
-                  STATE["public_ip"],STATE["public_port"],STATE["nat"] = ext_ip,ext_port,nat
+                  STATE["public_ip"], STATE["public_port"], STATE["nat"] = ext_ip, ext_port, nat
                   STATE["updated_at"] = now_iso()
-              
-              if changed:
-                  print(f"[stun] {nat} {ext_ip}:{ext_port}", flush=True)
-              
+              print(f"[stun] {nat} {ext_ip}:{ext_port}", flush=True)
               return True
-          except Exception as e:
-              print(f"[stun] error: {e}", flush=True)
+          except:
               return False
           finally:
-              # Restore WG if it was up and we have the key
-              if was_up and priv_key:
+              if priv_key:
                   try:
-                      wg_up(priv_key)
+                      ensure_wg_iface(priv_key)
                       if STATE["overlay_ip"]:
                           ensure_overlay_addr(STATE["overlay_ip"])
-                      print("[wg] Interface restored", flush=True)
-                      # Restore peer configurations and routes
-                      try:
-                          for pub, idx in PEER_INDEX.items():
-                              if pub in PEER_ENDPOINTS:
-                                  peer_overlay = ip_for_index(idx)
-                                  endpoint = PEER_ENDPOINTS[pub]
-                                  wg_set_peer(pub, peer_overlay, endpoint, keepalive=25)
-                                  print(f"[wg] Restored peer {pub[:8]} idx {idx} overlay {peer_overlay} -> {endpoint}", flush=True)
-                      except Exception as e:
-                          print(f"[wg] Failed to restore peer routes: {e}", flush=True)
-                      # Check network configuration
-                      try:
-                          route = sh("ip route show")
-                          addr = sh("ip addr show")
-                          print("[net] Routes:\n" + route + "\n[net] Interfaces:\n" + addr, flush=True)
-                      except Exception as e:
-                          print(f"[net] Error getting network status: {e}", flush=True)
-                      # Reconfigure peers from gist after interface is up
-                      try:
-                          listing = fetch_json(GIST_URL)
-                          urls = listing.get("peers") if isinstance(listing, dict) else (listing if isinstance(listing, list) else [])
-                          reconfigure_from_gist(urls)
-                      except Exception as e:
-                          print(f"[wg] Failed to restore peers: {e}", flush=True)
-                  except Exception as e:
-                      print(f"[wg] Failed to restore interface: {e}", flush=True)
+                      for pub, idx in PEER_INDEX.items():
+                          if pub in PEER_ENDPOINTS:
+                              wg_set_peer(pub, ip_for_index(idx), PEER_ENDPOINTS[pub])
+                      listing = fetch_json(GIST_URL)
+                      urls = listing.get("peers") if isinstance(listing, dict) else (listing if isinstance(listing, list) else [])
+                      reconfigure_from_gist(urls)
+                  except:
+                      pass
 
       def stun_loop():
           last_check = 0
@@ -315,118 +214,114 @@ services:
                   print(f"[stun] loop error: {e}", flush=True)
                   time.sleep(10)
       def reconfigure_from_gist(peers_list):
-          # 1) fetch each /node.json; build index->pubkey mapping; find self
-          index_pub = {}
-          pub_index = {}
           docs = {}
           for idx, url in enumerate(peers_list):
               try:
+                  print(f"[peer] fetch {url}", flush=True)
                   doc = fetch_json(url)
                   docs[url] = doc
-                  pub = doc.get("wg_pubkey")
-                  if pub:
-                      index_pub[idx] = pub
-                      pub_index[pub] = idx
-              except Exception as e:
-                  print(f"[peer] fetch {url}: {e}", flush=True)
-          with LOCK:
-              # remember docs
-              for u,d in docs.items():
-                  PEERS_JSON[u] = d
-          # identify self by pubkey match
-          self_idx = None
+                  if pub := doc.get("wg_pubkey"):
+                      PEER_INDEX[pub] = idx
+              except: pass
+
           with LOCK:
               mypub = STATE["wg_pubkey"]
-          for idx, url in enumerate(peers_list):
-              doc = docs.get(url)
-              if doc and doc.get("wg_pubkey") == mypub:
-                  self_idx = idx
-                  with LOCK:
-                      STATE["self_url"] = url
-                  break
-          # set overlay by self index (if known)
-          if self_idx is not None:
-              desired = ip_for_index(self_idx)
-              ensure_overlay_addr(desired)
-              with LOCK:
-                  STATE["self_index"] = self_idx
-                  STATE["overlay_ip"] = desired
-          else:
-              # no overlay yet; bail on peer config until we know our own address
-              return
-          # 2) for each peer, compute overlay from its index; set AllowedIPs and endpoint
-          for idx, url in enumerate(peers_list):
-              doc = docs.get(url)
-              if not doc: 
-                  continue
-              pub = doc.get("wg_pubkey")
-              if not pub or pub == mypub:
-                  continue
-              peer_overlay = ip_for_index(idx)
-              PEER_INDEX[pub] = idx
-              pip, pport = doc.get("public_ip"), doc.get("public_port")
-              endpoint = f"{pip}:{pport}" if pip and pport else ""
-              try:
-                  wg_set_peer(pub, peer_overlay, endpoint, keepalive=25 if endpoint else 0)
-                  if endpoint:
+              # Find self first
+              for idx, url in enumerate(peers_list):
+                  if doc := docs.get(url):
+                      if doc.get("wg_pubkey") == mypub:
+                          if STATE["self_url"] != url or STATE["self_index"] != idx:
+                              STATE["self_url"] = url
+                              STATE["self_index"] = idx
+                              STATE["overlay_ip"] = ip_for_index(idx)
+                              ensure_overlay_addr(STATE["overlay_ip"])
+                          break
+              else: return
+
+              # Find current pubkey for each position (excluding our position)
+              position_keys = {}
+              for idx, url in enumerate(peers_list):
+                  if idx == STATE["self_index"]: continue
+                  doc = docs.get(url)
+                  if not doc: continue
+                  pub = doc.get("wg_pubkey")
+                  if not pub: continue
+                  position_keys[idx] = pub
+
+              # Remove old peers that arent in their positions anymore
+              for old_pub, old_idx in list(PEER_INDEX.items()):
+                  if old_pub == mypub: continue  # Never remove ourselves
+                  if old_idx in position_keys and position_keys[old_idx] == old_pub: continue
+                  try:
+                      sh(f"wg set {WG_IFACE} peer {old_pub} remove")
+                      print(f"[wg] removed old peer {old_pub[:8]} from position {old_idx}", flush=True)
+                      del PEER_INDEX[old_pub]
+                      if old_pub in PEER_ENDPOINTS: del PEER_ENDPOINTS[old_pub]
+                  except: pass
+
+              # Configure current peers
+              for idx, url in enumerate(peers_list):
+                  doc = docs.get(url)
+                  if not doc: continue
+                  pub = doc.get("wg_pubkey")
+                  if not pub or pub == mypub: continue
+                  
+                  pip, pport = doc.get("public_ip"), doc.get("public_port")
+                  endpoint = f"{pip}:{pport}" if pip and pport else ""
+                  
+                  try:
+                      wg_set_peer(pub, ip_for_index(idx), endpoint, keepalive=25 if endpoint else 0)
+                      PEER_INDEX[pub] = idx
+                      if not endpoint: continue
+                      
+                      old_endpoint = PEER_ENDPOINTS.get(pub)
                       PEER_ENDPOINTS[pub] = endpoint
-                      print(f"[wg] peer {pub[:8]} idx {idx} overlay {peer_overlay} -> {endpoint}", flush=True)
-                  else:
-                      print(f"[wg] peer {pub[:8]} idx {idx} overlay {peer_overlay} (no endpoint yet)", flush=True)
-              except Exception as e:
-                  print(f"[wg] set err ({pub[:8]}): {e}", flush=True)
+                      if old_endpoint == endpoint: continue
+                      
+                      print(f"[wg] peer {pub[:8]} at position {idx} endpoint {endpoint}", flush=True)
+                      print(sh(f"wg show {WG_IFACE}"), flush=True)
+                  except: pass
+              
+              # Update stored docs after successful reconfiguration
+              for u,d in docs.items(): PEERS_JSON[u] = d
       def gist_loop():
           last_urls = None
+          last_check = 0
+          CHECK_INTERVAL = 30  # seconds
           while True:
               try:
+                  now = time.time()
                   listing = fetch_json(GIST_URL)
                   urls = listing.get("peers") if isinstance(listing, dict) else (listing if isinstance(listing, list) else [])
-                  # only recompute if list changed OR periodically
-                  if urls != last_urls or int(time.time()) % 30 == 0:
+                  if urls != last_urls or now - last_check >= CHECK_INTERVAL:
+                      last_check = now
                       reconfigure_from_gist(urls)
                       last_urls = urls
-                  # refresh endpoints if peers changed their public port/ip
+
                   for url, doc in list(PEERS_JSON.items()):
                       try:
-                          newdoc = fetch_json(url)
-                      except Exception:
-                          continue
-                      if newdoc != doc:
+                          if (newdoc := fetch_json(url)) == doc: continue
                           PEERS_JSON[url] = newdoc
-                          pub = newdoc.get("wg_pubkey")
-                          if not pub or pub == STATE["wg_pubkey"]:
-                              continue
+                          if not (pub := newdoc.get("wg_pubkey")) or pub == STATE["wg_pubkey"]: continue
                           pip, pport = newdoc.get("public_ip"), newdoc.get("public_port")
                           endpoint = f"{pip}:{pport}" if pip and pport else ""
-                          idx = PEER_INDEX.get(pub)
-                          overlay = ip_for_index(idx) if idx is not None else None
-                          if endpoint and overlay:
-                              prev = PEER_ENDPOINTS.get(pub)
-                              if prev != endpoint:
-                                  try:
-                                      # wg_set_peer will also update the route
-                                      wg_set_peer(pub, overlay, endpoint, keepalive=25)
-                                      PEER_ENDPOINTS[pub] = endpoint
-                                      print(f"[wg] endpoint update {pub[:8]} overlay {overlay} -> {endpoint}", flush=True)
-                                      # Verify route was added
-                                      route = sh(f"ip route show {overlay}")
-                                      print(f"[wg] route for {pub[:8]}: {route}", flush=True)
-                                  except Exception as e:
-                                      print(f"[wg] endpoint update err: {e}", flush=True)
-              except Exception as e:
-                  print(f"[gist] error: {e}", flush=True)
-              time.sleep(5)
-      # Simple test HTTP server that listens on WireGuard IP
+                          if not endpoint: continue
+                          if not (idx := PEER_INDEX.get(pub)): continue
+                          overlay = ip_for_index(idx)
+                          if PEER_ENDPOINTS.get(pub) == endpoint: continue
+                          try:
+                              wg_set_peer(pub, overlay, endpoint, keepalive=25)
+                              PEER_ENDPOINTS[pub] = endpoint
+                          except: pass
+                      except: continue
+              except: pass
+              time.sleep(15)
       class TestHandler(http.server.BaseHTTPRequestHandler):
           def do_GET(self):
               if self.path == "/test":
                   with LOCK:
-                      body = {
-                          "message": "Hello from WireGuard!",
-                          "wg_ip": STATE["overlay_ip"],
-                          "time": now_iso()
-                      }
-                  b = json.dumps(body).encode()
+                      b = json.dumps({"wg_ip": STATE["overlay_ip"], "time": now_iso()}).encode()
+                  print(f"[http] serving request from {self.client_address[0]}", flush=True)
                   self.send_response(200)
                   self.send_header("content-type", "application/json")
                   self.send_header("content-length", str(len(b)))
@@ -435,38 +330,18 @@ services:
               else:
                   self.send_response(404)
                   self.end_headers()
-                  self.wfile.write(b"Not found")
-
           def log_message(self, *a): return
 
       def run_test_server():
           while True:
               try:
-                  # Wait until we have our WireGuard IP
                   if not STATE["overlay_ip"]:
                       time.sleep(1)
                       continue
-                  
-                  # Extract IP without /32
                   wg_ip = STATE["overlay_ip"].split("/")[0]
-                  print(f"[test] Starting test HTTP server on {wg_ip}:8000", flush=True)
-                  
-                  # Listen on WireGuard IP
-                  print(f"[test] Attempting to bind server to {wg_ip}:8000", flush=True)
                   server = http.server.ThreadingHTTPServer((wg_ip, 8000), TestHandler)
-                  print(f"[test] Server successfully bound to {wg_ip}:8000", flush=True)
                   server.serve_forever()
-              except Exception as e:
-                  print(f"[test] Server error on {wg_ip}: {str(e)}", flush=True)
-                  import traceback
-                  print(f"[test] {traceback.format_exc()}", flush=True)
-                  # Check network state when binding fails
-                  try:
-                      route = sh("ip route show")
-                      addr = sh("ip addr show")
-                      print(f"[test] Network state when binding failed:\nRoutes:\n{route}\nInterfaces:\n{addr}", flush=True)
-                  except Exception as ne:
-                      print(f"[test] Error getting network state: {ne}", flush=True)
+              except Exception:
                   time.sleep(5)
 
       def main():
@@ -484,41 +359,18 @@ services:
           # Periodically test connectivity to other nodes
           while True:
               try:
-                  if STATE["overlay_ip"] and STATE["self_index"] is not None:
-                      # Try other nodes in the network
-                      for idx, url in enumerate(fetch_json(GIST_URL)):
-                          if idx != STATE["self_index"]:
-                              other_ip = ip_for_index(idx).split("/")[0]
-                              # First check WireGuard status
-                              try:
-                                  # Check if route exists for peer
-                                  route = sh(f"ip route show {other_ip}/32")
-                                  print(f"[test] Route to {other_ip}: {route}", flush=True)
-                                  
-                                  # Check WireGuard handshake status
-                                  status = get_wg_status()
-                                  print(f"[wg] {status}", flush=True)
-                                  
-                                  # Try ping first
-                                  try:
-                                      ping = sh(f"ping -c 1 -W 1 {other_ip}")
-                                      print(f"[test] Ping to {other_ip} successful: {ping}", flush=True)
-                                  except Exception as e:
-                                      print(f"[test] Ping to {other_ip} failed: {e}", flush=True)
-                                  
-                                  # Try HTTP connection
-                                  r = requests.get(f"http://{other_ip}:8000/test", timeout=1)
-                                  print(f"[test] Connected to {other_ip}: {r.json()}", flush=True)
-                              except Exception as e:
-                                  print(f"[test] Failed to connect to {other_ip}: {e}", flush=True)
-                                  # Show full network status on failure
-                                  try:
-                                      net_status = get_net_status()
-                                      print(f"[net] Full status on failure:\n{net_status}", flush=True)
-                                  except Exception as ne:
-                                      print(f"[net] Error getting network status: {ne}", flush=True)
-              except Exception as e:
-                  print(f"[test] Error in connectivity check: {e}", flush=True)
+                  if not STATE["overlay_ip"] or STATE["self_index"] is None: continue
+                  # Try other nodes in the network
+                  for idx, url in enumerate(fetch_json(GIST_URL)):
+                      if idx == STATE["self_index"]: continue
+                      other_ip = ip_for_index(idx).split("/")[0]
+                      try:
+                          r = requests.get(f"http://{other_ip}:8000/test", timeout=1)
+                          print(f"[http] connected to {other_ip}: {r.json()}", flush=True)
+                      except:
+                          pass
+              except:
+                  pass
               time.sleep(10)
       if __name__ == "__main__":
           main()
