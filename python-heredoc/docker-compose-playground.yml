@@ -1,0 +1,91 @@
+services:
+  # Single test service with inline dockerfile - modify this to test all scenarios
+  test-service:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM python:3.11-slim
+        RUN pip install flask requests beautifulsoup4
+        ENV PYTHONUNBUFFERED=1
+        ENV BUILD_VERSION=2
+    ports:
+      - "8090:8090"
+    command: |
+      bash -c '
+      cat > /tmp/test.py << "EOF"
+      from flask import Flask, jsonify
+      import time
+      import os
+      
+      app = Flask(__name__)
+      
+      # MODIFY THIS LINE TO TEST RESTART BEHAVIOR
+      TEST_MESSAGE = "Test version 2 - COMMAND CHANGE"
+      
+      @app.route("/")
+      def status():
+          return jsonify({
+              "message": TEST_MESSAGE,
+              "timestamp": time.time(),
+              "pid": os.getpid()
+          })
+      
+      # MODIFY INDENTATION HERE TO TEST YAML-LEVEL INDENTATION ISSUES
+      @app.route("/indent")
+      def indent_test():
+          data = {"working": True}
+          # All lines must maintain proper indentation for YAML
+          if True:
+              nested = {"level": "correct"}
+              data.update(nested)
+          return jsonify(data)
+      
+      # SINGLE QUOTE TESTING - MODIFY TO TEST DIFFERENT PATTERNS
+      @app.route("/quotes")
+      def quote_test():
+          # ❌ CONFIRMED: Even single quotes in double quotes break heredoc
+          # test_simple = "This has a single quote"  # BREAKS!
+          
+          # ✅ WORKING: Only escaped single quotes work
+          escaped_apostrophe = "It'\''s working!"
+          escaped_contraction = "Don'\''t worry about it"
+          
+          # ✅ SAFE: Avoid single quotes entirely when possible
+          safe_alternative = "It is working without apostrophes"
+          
+          return jsonify({
+              "escaped_apostrophe": escaped_apostrophe,
+              "escaped_contraction": escaped_contraction,
+              "safe_alternative": safe_alternative,
+              "escape_rule": "ANY single quote breaks heredoc - must use escape",
+              "recommendation": "Avoid single quotes entirely when possible"
+          })
+      
+      @app.route("/test-deps")
+      def test_dependencies():
+          import requests
+          import os
+          try:
+              from bs4 import BeautifulSoup
+              bs4_available = True
+          except ImportError:
+              bs4_available = False
+          
+          try:
+              response = requests.get("https://httpbin.org/json", timeout=5)
+              return jsonify({
+                  "dependencies": "working",
+                  "requests": "installed from dockerfile",
+                  "beautifulsoup4_available": bs4_available,
+                  "build_version": os.environ.get("BUILD_VERSION", "1"),
+                  "status_code": response.status_code
+              })
+          except Exception as e:
+              return jsonify({"error": str(e)})
+      
+      if __name__ == "__main__":
+          print(f"Starting with: {TEST_MESSAGE}")
+          app.run(host="0.0.0.0", port=8090)
+      EOF
+      python /tmp/test.py
+      '

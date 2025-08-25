@@ -1,0 +1,44 @@
+services:
+  web-service:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM python:3.11-slim
+        RUN pip install requests
+        ENV PYTHONUNBUFFERED=1
+    ports:
+      - "8080:8080"
+    command: |
+      bash -c '
+      pip install flask &&
+      cat > /tmp/app.py << "EOF"
+      from flask import Flask, jsonify
+      import os
+      import requests
+      
+      app = Flask(__name__)
+      
+      @app.route("/")
+      def demo():
+          # ✅ Safe patterns demonstrated
+          home = os.environ.get("HOME", "/app")
+          price = "$$19.99"  # Use $$ for literal $
+          path = "C:\\Program Files"
+          
+          try:
+              resp = requests.get("https://httpbin.org/json", timeout=3)
+              return jsonify({
+                  "status": "working",
+                  "home": home,
+                  "price": price,
+                  "path": path,
+                  "external": resp.status_code
+              })
+          except:
+              return jsonify({"status": "working", "external": "failed"})
+      
+      if __name__ == "__main__":
+          app.run(host="0.0.0.0", port=8080)
+      EOF
+      python /tmp/app.py
+      '
