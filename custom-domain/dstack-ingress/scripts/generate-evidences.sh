@@ -41,7 +41,7 @@ done
 QUOTED_HASH="${PADDED_HASH}"
 
 if [[ -e /var/run/dstack.sock ]]; then
-    curl -s --unix-socket /var/run/dstack.sock "http://localhost/prpc/GetQuote?report_data=${QUOTED_HASH}" > quote.json
+    curl -s --unix-socket /var/run/dstack.sock "http://localhost/GetQuote?report_data=${QUOTED_HASH}" > quote.json
 else
     curl -s --unix-socket /var/run/tappd.sock "http://localhost/prpc/Tappd.RawQuote?report_data=${QUOTED_HASH}" > quote.json
 fi

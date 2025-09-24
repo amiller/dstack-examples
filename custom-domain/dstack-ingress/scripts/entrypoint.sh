@@ -15,8 +15,30 @@ fi
 
 echo "Setting up certbot environment"
 
+setup_py_env() {
+    if [ ! -d /opt/app-venv ]; then
+        echo "Creating application virtual environment"
+        python3 -m venv --system-site-packages /opt/app-venv
+    fi
+
+    # Activate venv for subsequent steps
+    # shellcheck disable=SC1091
+    source /opt/app-venv/bin/activate
+
+    if [ ! -f /.venv_bootstrapped ]; then
+        echo "Bootstrapping certbot dependencies"
+        pip install --upgrade pip
+        pip install certbot requests
+        touch /.venv_bootstrapped
+    fi
+
+    ln -sf /opt/app-venv/bin/certbot /usr/local/bin/certbot
+    echo 'source /opt/app-venv/bin/activate' > /etc/profile.d/app-venv.sh
+}
+
 setup_certbot_env() {
-    # Activate the pre-built virtual environment
+    # Ensure the virtual environment is active for certbot configuration
+    # shellcheck disable=SC1091
     source /opt/app-venv/bin/activate
 
     # Use the unified certbot manager to install plugins and setup credentials
@@ -193,6 +215,7 @@ if [ ! -f "/.bootstrapped" ]; then
     bootstrap
 else
     echo "Certificate for $DOMAIN already exists"
+    generate-evidences.sh
 fi
 
 renewal-daemon.sh &
