@@ -1,5 +1,9 @@
 # Dstack Remote Attestation Example
 
+> 🚨 Important: This example is a PoC intended to illustrate the principles only; it is not optimized for production use.
+>
+> For a streamlined, production-ready workflow, use the Dstack Verifier: https://github.com/Dstack-TEE/dstack/tree/master/verifier
+
 This example illustrates the remote attestation process for every component of the Dstack Applications. It encompasses everything from the CPU microcode to the TDVF, VM configuration, kernel, kernel parameters and application code. For further details, please refer to our [attestation guide](https://github.com/Dstack-TEE/dstack/blob/6b77340cf530b4532c5815039a74bb3a60302378/attestation.md).
 
 ## Overview
