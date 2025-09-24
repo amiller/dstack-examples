@@ -62,7 +62,7 @@ The dstack-ingress now supports multiple domains in a single container:
 
 ### Deployment
 
-You can either build the ingress container and push it to docker hub, or use the prebuilt image at `kvin/dstack-ingress`.
+You can either build the ingress container and push it to docker hub, or use the prebuilt image at `dstacktee/dstack-ingress:20250924`.
 
 #### Option 1: Use the Pre-built Image
 
@@ -71,7 +71,7 @@ The fastest way to get started is to use our pre-built image. Simply use the fol
 ```yaml
 services:
   dstack-ingress:
-    image: kvin/dstack-ingress@sha256:<the latest image hash>
+    image: dstacktee/dstack-ingress:20250924@sha256:40429d78060ef3066b5f93676bf3ba7c2e9ac47d4648440febfdda558aed4b32
     ports:
       - "443:443"
     environment:
@@ -104,7 +104,7 @@ volumes:
 ```yaml
 services:
   ingress:
-    image: kvin/dstack-ingress@sha256:776d26616584d487d94d94df9be026e98b109af41797483c172fc4991f7e9968
+    image: dstacktee/dstack-ingress:20250924@sha256:40429d78060ef3066b5f93676bf3ba7c2e9ac47d4648440febfdda558aed4b32
     ports:
       - "443:443"
     environment:
@@ -222,7 +222,7 @@ example:
 ```yaml
 services:
   dstack-ingress:
-    image: kvin/dstack-ingress@sha256:<the latest image hash>
+    image: dstacktee/dstack-ingress:20250924@sha256:40429d78060ef3066b5f93676bf3ba7c2e9ac47d4648440febfdda558aed4b32
     ports:
       - "443:443"
     environment:
