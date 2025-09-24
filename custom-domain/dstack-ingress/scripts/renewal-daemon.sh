@@ -3,7 +3,6 @@
 while true; do
     echo "[$(date)] Checking for certificate renewal"
 
-    local all_domains
     all_domains=$(get-all-domains.sh)
 
     if [ -n "$all_domains" ]; then
