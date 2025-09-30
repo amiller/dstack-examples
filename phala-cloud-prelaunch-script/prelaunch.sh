@@ -157,9 +157,9 @@ if [[ -n "$DSTACK_AUTHORIZED_KEYS" ]]; then
 fi
 
 
-if [[ -e /var/run/dstack.sock ]]; then
+if [[ -S /var/run/dstack.sock ]]; then
     export DSTACK_APP_ID=$(curl -s --unix-socket /var/run/dstack.sock http://dstack/Info | jq -j .app_id)
-elif [[ -e /var/run/tappd.sock ]]; then
+elif [[ -S /var/run/tappd.sock ]]; then
     export DSTACK_APP_ID=$(curl -s --unix-socket /var/run/tappd.sock http://dstack/prpc/Tappd.Info | jq -j .app_id)
 fi
 # Check if app-compose.json has default_gateway_domain field and DSTACK_GATEWAY_DOMAIN is not set
