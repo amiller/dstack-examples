@@ -49,6 +49,11 @@ setup_certbot_env() {
 setup_py_env
 
 setup_nginx_conf() {
+    local client_max_body_size_conf=""
+    if [ -n "$CLIENT_MAX_BODY_SIZE" ]; then
+        client_max_body_size_conf="    client_max_body_size ${CLIENT_MAX_BODY_SIZE};"
+    fi
+
     cat <<EOF >/etc/nginx/conf.d/default.conf
 server {
     listen ${PORT} ssl;
@@ -88,6 +93,7 @@ server {
 
     # Disable SSL renegotiation
     ssl_early_data off;
+${client_max_body_size_conf}
 
     location / {
         ${PROXY_CMD}_pass ${TARGET_ENDPOINT};
