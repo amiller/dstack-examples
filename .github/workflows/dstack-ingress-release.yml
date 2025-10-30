@@ -1,0 +1,83 @@
+name: dstack-ingress Release
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'dstack-ingress-v*'
+
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  build-and-attest:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_REGISTRY: docker.io
+      IMAGE_REPOSITORY: ${{ vars.DOCKERHUB_ORG }}/dstack-ingress
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Parse version from tag
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/dstack-ingress-v}
+          if [ -z "${VERSION}" ]; then
+            echo "Unable to parse version from ref: ${GITHUB_REF}" >&2
+            exit 1
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "IMAGE_REFERENCE=${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}:${VERSION}" >> "$GITHUB_ENV"
+          echo "Parsed version: ${VERSION}"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo jq
+
+      - name: Log in to Docker registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build reproducible image and push
+        working-directory: custom-domain/dstack-ingress
+        env:
+          IMAGE_REFERENCE: ${{ env.IMAGE_REFERENCE }}
+        run: |
+          ./build-image.sh --push "${IMAGE_REFERENCE}"
+
+      - name: Capture image digest
+        id: capture-digest
+        working-directory: custom-domain/dstack-ingress
+        run: |
+          DIGEST=$(skopeo inspect oci-archive:./oci.tar | jq -r '.Digest')
+          if [ -z "${DIGEST}" ]; then
+            echo "Failed to determine image digest" >&2
+            exit 1
+          fi
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: docker.io/${{ env.IMAGE_REPOSITORY }}
+          subject-digest: ${{ steps.capture-digest.outputs.digest }}
+          push-to-registry: true
+
+      - name: Publish summary
+        env:
+          IMAGE_REFERENCE: ${{ env.IMAGE_REFERENCE }}
+          IMAGE_DIGEST: ${{ steps.capture-digest.outputs.digest }}
+        run: |
+          {
+            echo "## dstack-ingress image"
+            echo ""
+            echo "- Tag: \`${IMAGE_REFERENCE}\`"
+            echo "- Digest: \`${IMAGE_DIGEST}\`"
+            echo "- Sigstore: https://search.sigstore.dev/?hash=${IMAGE_DIGEST}"
+          } >> "$GITHUB_STEP_SUMMARY"
