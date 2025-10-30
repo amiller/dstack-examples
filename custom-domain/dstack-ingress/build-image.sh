@@ -22,6 +22,19 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+require_command() {
+    local cmd="$1"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "Error: required command '$cmd' not found in PATH" >&2
+        exit 1
+    fi
+}
+
+for required in docker skopeo jq git; do
+    require_command "$required"
+done
+
 # Check if buildkit_20 already exists before creating it
 if ! docker buildx inspect buildkit_20 &>/dev/null; then
     docker buildx create --use --driver-opt image=moby/buildkit:v0.20.2 --name buildkit_20
