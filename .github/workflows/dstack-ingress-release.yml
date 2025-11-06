@@ -81,3 +81,13 @@ jobs:
             echo "- Digest: \`${IMAGE_DIGEST}\`"
             echo "- Sigstore: https://search.sigstore.dev/?hash=${IMAGE_DIGEST}"
           } >> "$GITHUB_STEP_SUMMARY"
+      
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            ## Docker Image Digest (SHA256)
+
+            | Image | Digest | Verification |
+            |---|---|---|
+            | `${IMAGE_REFERENCE}` | `${IMAGE_DIGEST}` | [Verify on Sigstore](https://search.sigstore.dev/?hash=${IMAGE_DIGEST}) |
