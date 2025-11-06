@@ -19,6 +19,15 @@ fi
 if ! CLIENT_MAX_BODY_SIZE=$(sanitize_client_max_body_size "$CLIENT_MAX_BODY_SIZE"); then
     exit 1
 fi
+if ! PROXY_READ_TIMEOUT=$(sanitize_proxy_timeout "$PROXY_READ_TIMEOUT"); then
+    exit 1
+fi
+if ! PROXY_SEND_TIMEOUT=$(sanitize_proxy_timeout "$PROXY_SEND_TIMEOUT"); then
+    exit 1
+fi
+if ! PROXY_CONNECT_TIMEOUT=$(sanitize_proxy_timeout "$PROXY_CONNECT_TIMEOUT"); then
+    exit 1
+fi
 if ! TXT_PREFIX=$(sanitize_dns_label "$TXT_PREFIX"); then
     exit 1
 fi
@@ -73,6 +82,21 @@ setup_nginx_conf() {
         client_max_body_size_conf="    client_max_body_size ${CLIENT_MAX_BODY_SIZE};"
     fi
 
+    local proxy_read_timeout_conf=""
+    if [ -n "$PROXY_READ_TIMEOUT" ]; then
+        proxy_read_timeout_conf="        ${PROXY_CMD}_read_timeout ${PROXY_READ_TIMEOUT};"
+    fi
+
+    local proxy_send_timeout_conf=""
+    if [ -n "$PROXY_SEND_TIMEOUT" ]; then
+        proxy_send_timeout_conf="        ${PROXY_CMD}_send_timeout ${PROXY_SEND_TIMEOUT};"
+    fi
+
+    local proxy_connect_timeout_conf=""
+    if [ -n "$PROXY_CONNECT_TIMEOUT" ]; then
+        proxy_connect_timeout_conf="        ${PROXY_CMD}_connect_timeout ${PROXY_CONNECT_TIMEOUT};"
+    fi
+
     cat <<EOF >/etc/nginx/conf.d/default.conf
 server {
     listen ${PORT} ssl;
@@ -120,6 +144,9 @@ ${client_max_body_size_conf}
         ${PROXY_CMD}_set_header X-Real-IP \$remote_addr;
         ${PROXY_CMD}_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         ${PROXY_CMD}_set_header X-Forwarded-Proto \$scheme;
+${proxy_read_timeout_conf}
+${proxy_send_timeout_conf}
+${proxy_connect_timeout_conf}
     }
 
     location /evidences/ {
