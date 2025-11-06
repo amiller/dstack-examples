@@ -177,6 +177,9 @@ configs:
 - `TARGET_ENDPOINT`: The plain HTTP endpoint of your dstack application (for single domain mode)
 - `SET_CAA`: Set to `true` to enable CAA record setup
 - `CLIENT_MAX_BODY_SIZE`: Optional value for nginx `client_max_body_size` (numeric with optional `k|m|g` suffix, e.g. `50m`) in single-domain mode
+- `PROXY_READ_TIMEOUT`: Optional value for nginx `proxy_read_timeout` (numeric with optional `s|m|h` suffix, e.g. `30s`) in single-domain mode
+- `PROXY_SEND_TIMEOUT`: Optional value for nginx `proxy_send_timeout` (numeric with optional `s|m|h` suffix, e.g. `30s`) in single-domain mode
+- `PROXY_CONNECT_TIMEOUT`: Optional value for nginx `proxy_connect_timeout` (numeric with optional `s|m|h` suffix, e.g. `10s`) in single-domain mode
 
 **Backward Compatibility:**
 

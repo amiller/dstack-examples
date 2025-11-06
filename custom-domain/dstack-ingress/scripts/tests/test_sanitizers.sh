@@ -47,6 +47,11 @@ assert_equal "$(sanitize_target_endpoint grpc://svc:50051)" "grpc://svc:50051" "
 assert_equal "$(sanitize_client_max_body_size 50m)" "50m" "sanitize_client_max_body_size accepts suffix"
 assert_equal "$(sanitize_dns_label test_label)" "test_label" "sanitize_dns_label accepts lowercase"
 assert_equal "$(sanitize_dns_label test-label)" "test-label" "sanitize_dns_label accepts hyphen"
+assert_equal "$(sanitize_proxy_timeout 30)" "30" "sanitize_proxy_timeout accepts numeric value"
+assert_equal "$(sanitize_proxy_timeout 30s)" "30s" "sanitize_proxy_timeout accepts seconds suffix"
+assert_equal "$(sanitize_proxy_timeout 5m)" "5m" "sanitize_proxy_timeout accepts minutes suffix"
+assert_equal "$(sanitize_proxy_timeout 1h)" "1h" "sanitize_proxy_timeout accepts hours suffix"
+assert_equal "$(sanitize_proxy_timeout '')" "" "sanitize_proxy_timeout accepts empty value"
 
 # Failing cases
 assert_fails "sanitize_port rejects non-numeric" sanitize_port abc
@@ -60,6 +65,26 @@ else
     printf '%s\n' "$warning_output"
     failures=$((failures + 1))
 fi
+
+# Test invalid timeout values
+timeout_warning="$(sanitize_proxy_timeout "30ms" 2>&1 || true)"
+if [[ "$timeout_warning" == "Warning: Ignoring invalid proxy timeout value: 30ms" ]]; then
+    echo "PASS: sanitize_proxy_timeout warns on invalid suffix (ms)"
+else
+    echo "FAIL: sanitize_proxy_timeout warning unexpected"
+    printf '%s\n' "$timeout_warning"
+    failures=$((failures + 1))
+fi
+
+timeout_warning="$(sanitize_proxy_timeout "abc" 2>&1 || true)"
+if [[ "$timeout_warning" == "Warning: Ignoring invalid proxy timeout value: abc" ]]; then
+    echo "PASS: sanitize_proxy_timeout warns on non-numeric value"
+else
+    echo "FAIL: sanitize_proxy_timeout warning unexpected"
+    printf '%s\n' "$timeout_warning"
+    failures=$((failures + 1))
+fi
+
 assert_fails "sanitize_dns_label rejects invalid characters" sanitize_dns_label "bad*label"
 
 if [[ $failures -eq 0 ]]; then

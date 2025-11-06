@@ -68,3 +68,17 @@ sanitize_dns_label() {
         return 1
     fi
 }
+
+sanitize_proxy_timeout() {
+    local candidate="$1"
+    if [ -z "$candidate" ]; then
+        echo ""
+        return 0
+    fi
+    if [[ "$candidate" =~ ^[0-9]+[smh]?$ ]]; then
+        echo "$candidate"
+    else
+        echo "Warning: Ignoring invalid proxy timeout value: $candidate" >&2
+        echo ""
+    fi
+}
