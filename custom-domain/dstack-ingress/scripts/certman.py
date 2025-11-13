@@ -288,6 +288,8 @@ class CertManager:
         if action == "certonly":
             base_cmd.extend(["--agree-tos", "--no-eff-email",
                             "--email", email, "-d", domain])
+        if os.environ.get("CERTBOT_STAGING", "false") == "true":
+            base_cmd.extend(["--staging"])
 
         base_cmd.extend(["--dns-cloudflare-propagation-seconds=120"])
 
