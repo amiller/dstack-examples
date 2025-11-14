@@ -90,4 +90,4 @@ jobs:
 
             | Image | Digest | Verification |
             |---|---|---|
-            | `${IMAGE_REFERENCE}` | `${IMAGE_DIGEST}` | [Verify on Sigstore](https://search.sigstore.dev/?hash=${IMAGE_DIGEST}) |
+            | ${{ env.IMAGE_REFERENCE }} | ${{ steps.capture-digest.outputs.digest }} | [Verify on Sigstore](https://search.sigstore.dev/?hash=${{ steps.capture-digest.outputs.digest }}) |
