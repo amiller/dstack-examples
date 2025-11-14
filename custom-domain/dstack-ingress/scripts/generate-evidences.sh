@@ -2,15 +2,16 @@
 
 set -e
 
-path="/etc/letsencrypt/accounts/acme-v02.api.letsencrypt.org/directory/*/regr.json"
-if [ "$CERTBOT_STAGING" == "true" ]; then
-    path="${path/acme-v02/acme-staging-v02}"
+source "/scripts/functions.sh"
+
+if ! ACME_ACCOUNT_FILE=$(get_letsencrypt_account_file); then
+    echo "Error: Cannot generate evidences without Let's Encrypt account file"
+    exit 1
 fi
-ACME_ACCOUNT_FILE=$(ls $path)
 
 mkdir -p /evidences
 cd /evidences || exit
-cp ${ACME_ACCOUNT_FILE} acme-account.json
+cp "${ACME_ACCOUNT_FILE}" acme-account.json
 
 # Get all domains and copy their certificates
 all_domains=$(get-all-domains.sh)
