@@ -291,7 +291,10 @@ class CertManager:
         if os.environ.get("CERTBOT_STAGING", "false") == "true":
             base_cmd.extend(["--staging"])
 
-        base_cmd.extend(["--dns-cloudflare-propagation-seconds=120"])
+        if getattr(self.provider, 'CERTBOT_PROPAGATION_SECONDS'):
+            propagation_seconds = self.provider.CERTBOT_PROPAGATION_SECONDS
+            propagation_param = f"--dns-{self.provider_type}-propagation-seconds={propagation_seconds}"
+            base_cmd.extend([propagation_param])
 
         # Log command with masked email for debugging
         masked_cmd = [arg if not (i > 0 and base_cmd[i-1] == "--email") else "<email>"
