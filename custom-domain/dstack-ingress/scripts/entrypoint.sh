@@ -201,7 +201,12 @@ set_caa_record() {
         return
     fi
     local ACCOUNT_URI
-    ACCOUNT_URI=$(jq -j '.uri' /etc/letsencrypt/accounts/acme-v02.api.letsencrypt.org/directory/*/regr.json)
+    find /etc/letsencrypt/accounts -name regr.json
+    path="/etc/letsencrypt/accounts/acme-v02.api.letsencrypt.org/directory/*/regr.json"
+    if [ "$CERTBOT_STAGING" == "true" ]; then
+        path="${path/acme-v02/acme-staging-v02}"
+    fi
+    ACCOUNT_URI=$(jq -j '.uri' $path)
     echo "Adding CAA record for $domain, accounturi=$ACCOUNT_URI"
     dnsman.py set_caa \
         --domain "$domain" \

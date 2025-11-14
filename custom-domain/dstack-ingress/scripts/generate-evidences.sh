@@ -2,7 +2,11 @@
 
 set -e
 
-ACME_ACCOUNT_FILE=$(ls /etc/letsencrypt/accounts/acme-v02.api.letsencrypt.org/directory/*/regr.json)
+path="/etc/letsencrypt/accounts/acme-v02.api.letsencrypt.org/directory/*/regr.json"
+if [ "$CERTBOT_STAGING" == "true" ]; then
+    path="${path/acme-v02/acme-staging-v02}"
+fi
+ACME_ACCOUNT_FILE=$(ls $path)
 
 mkdir -p /evidences
 cd /evidences || exit
