@@ -200,13 +200,17 @@ set_caa_record() {
         echo "Skipping CAA record setup"
         return
     fi
+
     local ACCOUNT_URI
-    find /etc/letsencrypt/accounts -name regr.json
-    path="/etc/letsencrypt/accounts/acme-v02.api.letsencrypt.org/directory/*/regr.json"
-    if [ "$CERTBOT_STAGING" == "true" ]; then
-        path="${path/acme-v02/acme-staging-v02}"
+    local account_file
+
+    if ! account_file=$(get_letsencrypt_account_file); then
+        echo "Warning: Cannot set CAA record - account file not found"
+        echo "This is not critical - certificates can still be issued without CAA records"
+        return
     fi
-    ACCOUNT_URI=$(jq -j '.uri' $path)
+
+    ACCOUNT_URI=$(jq -j '.uri' "$account_file")
     echo "Adding CAA record for $domain, accounturi=$ACCOUNT_URI"
     dnsman.py set_caa \
         --domain "$domain" \
@@ -217,7 +221,6 @@ set_caa_record() {
         echo "Warning: Failed to set CAA record for $domain"
         echo "This is not critical - certificates can still be issued without CAA records"
         echo "Consider disabling CAA records by setting SET_CAA=false if this continues to fail"
-        # Don't exit - CAA records are optional for certificate generation
     fi
 }
 

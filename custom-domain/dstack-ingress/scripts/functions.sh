@@ -82,3 +82,29 @@ sanitize_proxy_timeout() {
         echo ""
     fi
 }
+
+get_letsencrypt_account_path() {
+    local base_path="/etc/letsencrypt/accounts"
+    local api_endpoint="acme-v02.api.letsencrypt.org"
+
+    if [[ "$CERTBOT_STAGING" == "true" ]]; then
+        api_endpoint="acme-staging-v02.api.letsencrypt.org"
+    fi
+
+    echo "${base_path}/${api_endpoint}/directory/*/regr.json"
+}
+
+get_letsencrypt_account_file() {
+    local account_pattern
+    account_pattern=$(get_letsencrypt_account_path)
+
+    local account_files
+    account_files=( $account_pattern )
+
+    if [[ ! -f "${account_files[0]}" ]]; then
+        echo "Error: Let's Encrypt account file not found at $account_pattern" >&2
+        return 1
+    fi
+
+    echo "${account_files[0]}"
+}
