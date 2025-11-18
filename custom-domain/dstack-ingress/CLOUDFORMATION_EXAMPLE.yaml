@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  HostedZoneId:
+    Type: String
+    Default: 
+    Description: Route53 Hosted Zone ID
+  UserName:
+    Type: String
+    Description: IAM user that can only assume the Route53 role
+
+Resources:
+  User:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref UserName
+
+  AccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref User
+      Status: Active
+
+  Route53Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${UserName}-route53-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            # The *account root* as trusted principal.
+            # This avoids invalid-principal errors while remaining safe,
+            # because the USER policy enforces the actual restriction.
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: Route53DnsChallenges
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowDnsChallengeChanges
+                Effect: Allow
+                Action:
+                  - route53:ChangeResourceRecordSets
+                Resource: !Sub arn:aws:route53:::hostedzone/${HostedZoneId}
+              - Sid: AllowListingForDnsChallenge
+                Effect: Allow
+                Action:
+                  - route53:ListHostedZonesByName
+                  - route53:ListHostedZones
+                  - route53:GetChange
+                  - route53:ListResourceRecordSets
+                Resource: "*"
+
+  UserAssumeRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub '${UserName}-assume-route53-role'
+      Users:
+        - !Ref User
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/${UserName}-route53-role
+
+Outputs:
+  AWSAccessKeyId:
+    Description: Access key ID for the IAM user
+    Value: !Ref AccessKey
+
+  AWSSecretAccessKey:
+    Description: Secret access key for the IAM user
+    Value: !GetAtt AccessKey.SecretAccessKey
+
+  AWSUserArn:
+    Description: IAM User ARN
+    Value: !Sub arn:aws:iam::${AWS::AccountId}:user/${UserName}
+
+  Route53RoleArn:
+    Description: ARN of the Route53 role used by Certbot
+    Value: !Sub arn:aws:iam::${AWS::AccountId}:role/${UserName}-route53-role

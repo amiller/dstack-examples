@@ -52,7 +52,7 @@ setup_py_env() {
     if [ ! -f /.venv_bootstrapped ]; then
         echo "Bootstrapping certbot dependencies"
         pip install --upgrade pip
-        pip install certbot requests
+        pip install certbot requests boto3 botocore
         touch /.venv_bootstrapped
     fi
 

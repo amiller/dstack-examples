@@ -6,6 +6,7 @@ from .base import DNSProvider
 from .cloudflare import CloudflareDNSProvider
 from .linode import LinodeDNSProvider
 from .namecheap import NamecheapDNSProvider
+from .route53 import Route53DNSProvider
 
 
 class DNSProviderFactory:
@@ -15,6 +16,7 @@ class DNSProviderFactory:
         "cloudflare": CloudflareDNSProvider,
         "linode": LinodeDNSProvider,
         "namecheap": NamecheapDNSProvider,
+        "route53": Route53DNSProvider,
     }
 
     @classmethod
