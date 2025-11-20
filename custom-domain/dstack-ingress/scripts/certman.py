@@ -291,7 +291,7 @@ class CertManager:
         if os.environ.get("CERTBOT_STAGING", "false") == "true":
             base_cmd.extend(["--staging"])
 
-        if getattr(self.provider, 'CERTBOT_PROPAGATION_SECONDS') and self.provider.CERTBOT_PROPAGATION_SECONDS is not None:
+        if getattr(self.provider, 'CERTBOT_PROPAGATION_SECONDS'):
             propagation_seconds = self.provider.CERTBOT_PROPAGATION_SECONDS
             propagation_param = f"--dns-{self.provider_type}-propagation-seconds={propagation_seconds}"
             base_cmd.extend([propagation_param])

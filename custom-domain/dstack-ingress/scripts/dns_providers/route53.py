@@ -25,6 +25,7 @@ class Route53DNSProvider(DNSProvider):
     CERTBOT_PACKAGE = "certbot-dns-route53==5.1.0"
     CERTBOT_PROPAGATION_SECONDS = None
     AWS_CREDENTIALS_FILE = "~/.aws/credentials"
+    AWS_CONFIG_FILE = "~/.aws/config"
 
     def __init__(self):
         super().__init__()
@@ -40,10 +41,6 @@ class Route53DNSProvider(DNSProvider):
                 "Install with: pip install boto3"
             )
 
-        # Initialize Route53 client
-        # boto3 automatically uses environment variables:
-        # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN (optional)
-        # It also supports IAM roles when running on AWS infrastructure
         try:
             self.client = self.boto3.client("route53")
         except Exception as e:
@@ -55,12 +52,14 @@ class Route53DNSProvider(DNSProvider):
     def setup_certbot_credentials(self) -> bool:
         """Setup AWS credentials file for certbot.
 
-        certbot-dns-route53 uses standard AWS credentials from:
-        1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
-        2. ~/.aws/credentials file
-        3. IAM roles (when running on AWS)
+        This container will be provided with aws credentials purely for the purpose
+        of assuming a role. Doing so will enable the boto platform to provision
+        temporary access key and secret keys on demand!
 
-        If credentials are in environment variables, we'll create the credentials file.
+        Using this strategy we can impose least permissive and fast expiring access
+        to our domain.
+
+        Credentials are in environment variables, we'll create the credentials file.
         """
         aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
         aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -71,31 +70,45 @@ class Route53DNSProvider(DNSProvider):
             return True
 
         credentials_file = os.path.expanduser(self.AWS_CREDENTIALS_FILE)
+        config_file = os.path.expanduser(self.AWS_CONFIG_FILE)
+
+        aws_role_arn = os.getenv('AWS_ROLE_ARN')
+        aws_region = os.getenv('AWS_REGION', 'us-east-1')
+
         credentials_dir = os.path.dirname(credentials_file)
 
         try:
             # Create credentials directory
             os.makedirs(credentials_dir, exist_ok=True)
 
-            # Check if credentials file already exists
             if os.path.exists(credentials_file):
                 print(f"AWS credentials file already exists: {credentials_file}")
-                return True
 
-            # Write credentials file in AWS INI format
-            with open(credentials_file, "w") as f:
-                f.write("[default]\n")
-                f.write(f"aws_access_key_id = {aws_access_key}\n")
-                f.write(f"aws_secret_access_key = {aws_secret_key}\n")
+            else:
+                # Write credentials file in AWS INI format
+                with open(credentials_file, "w") as f:
+                    f.write("[certbot-source]\n")
+                    f.write(f"aws_access_key_id = {aws_access_key}\n")
+                    f.write(f"aws_secret_access_key = {aws_secret_key}\n")
 
-                # Add session token if available
-                aws_session_token = os.getenv("AWS_SESSION_TOKEN")
-                if aws_session_token:
-                    f.write(f"aws_session_token = {aws_session_token}\n")
+                # Set secure permissions
+                os.chmod(credentials_file, 0o600)
+                print(f"AWS credentials file created: {credentials_file}")
 
-            # Set secure permissions
-            os.chmod(credentials_file, 0o600)
-            print(f"AWS credentials file created: {credentials_file}")
+            if os.path.exists(credentials_file):
+                print(f"AWS config file already exists: {config_file}")
+
+            else:
+                # Write config file in AWS INI format
+                with open(config_file, "w") as f:
+                    f.write("[profile certbot]\n")
+                    f.write(f"role_arn={aws_role_arn}\n")
+                    f.write("source_profile=certbot-source\n")
+                    f.write(f"region={aws_region}\n")
+
+                # Set secure permissions
+                os.chmod(credentials_file, 0o600)
+                print(f"AWS config file created: {config_file}")
 
             # Pre-fetch hosted zone ID if we have a domain
             domain = os.getenv("DOMAIN")
