@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-from functools import cached_property
 import os
 import sys
 from typing import List, Optional
