@@ -7,6 +7,7 @@ This guide explains how to configure dstack-ingress to work with different DNS p
 - **Cloudflare** - The original and default provider
 - **Linode DNS** - For Linode-hosted domains
 - **Namecheap** - For Namecheap-hosted domains
+- **Route53** - For AWS hosted domains
 
 ## Environment Variables
 
@@ -73,6 +74,40 @@ NAMECHEAP_CLIENT_IP=your-client-ip
 - Namecheap doesn't support CAA records through their API currently
 - The certbot plugin uses the format `certbot-dns-namecheap` package
 
+### Route53
+
+```bash
+DNS_PROVIDER=route53
+AWS_ACCESS_KEY_ID=service-account-key-that-can-assume-role
+AWS_SECRET_ACCESS_KEY=service-account-secret-that-can-assume-role
+AWS_ROLE_ARN=role-that-can-mod-route53
+AWS_REGION=your-closest-region
+```
+
+**Required Permissions:**
+```yaml
+PolicyDocument:
+  Version: '2012-10-17'
+  Statement:
+    - Sid: AllowDnsChallengeChanges
+      Effect: Allow
+      Action:
+        - route53:ChangeResourceRecordSets
+      Resource: !Sub arn:aws:route53:::hostedzone/${HostedZoneId}
+    - Sid: AllowListingForDnsChallenge
+      Effect: Allow
+      Action:
+        - route53:ListHostedZonesByName
+        - route53:ListHostedZones
+        - route53:GetChange
+        - route53:ListResourceRecordSets
+```
+
+**Important Notes for Route53:**
+- The certbot plugin uses the format `certbot-dns-route53` package
+- CAA will merge AWS & Let's Encrypt CA domains to existing records if they exist
+- It is essential that the AWS service account used can only assume the limited role. See cloudformation example.
+
 ## Docker Compose Examples
 
 ### Linode Example
@@ -125,6 +160,34 @@ services:
     volumes:
       - ./letsencrypt:/etc/letsencrypt
       - ./evidences:/evidences
+```
+
+### Route53 Example
+
+```yaml
+services:
+  dstack-ingress:
+    image: dstack-ingress:latest
+    restart: unless-stopped
+    volumes:
+    - /var/run/dstack.sock:/var/run/dstack.sock
+    - cert-data:/etc/letsencrypt
+    ports:
+    - 443:443
+    environment:
+      DNS_PROVIDER: route53
+      DOMAIN: app.example.com
+      GATEWAY_DOMAIN: _.${DSTACK_GATEWAY_DOMAIN}
+
+      AWS_REGION: ${AWS_REGION}
+      AWS_ROLE_ARN: ${AWS_ROLE_ARN}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+
+      CERTBOT_EMAIL: ${CERTBOT_EMAIL}
+      TARGET_ENDPOINT: http://backend:8080
+      SET_CAA: 'true'
+
 ```
 
 ## Migration from Cloudflare-only Setup
