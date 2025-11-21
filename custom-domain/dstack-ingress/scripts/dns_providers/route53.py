@@ -5,13 +5,6 @@ import sys
 from typing import List, Optional
 from .base import DNSProvider, DNSRecord, CAARecord, RecordType
 
-"""
-letsencrypt.org
-amazon.com
-amazontrust.com
-awstrust.com
-amazonaws.com
-"""
 
 
 class Route53DNSProvider(DNSProvider):
