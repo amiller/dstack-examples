@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from functools import cached_property
 import os
 import sys
 from typing import List, Optional
@@ -17,8 +18,6 @@ class Route53DNSProvider(DNSProvider):
     CERTBOT_PLUGIN_MODULE = "certbot_dns_route53"
     CERTBOT_PACKAGE = "certbot-dns-route53==5.1.0"
     CERTBOT_PROPAGATION_SECONDS = None
-    AWS_CREDENTIALS_FILE = "~/.aws/credentials"
-    AWS_CONFIG_FILE = "~/.aws/config"
 
     def __init__(self):
         super().__init__()
@@ -42,6 +41,7 @@ class Route53DNSProvider(DNSProvider):
         self.hosted_zone_id: Optional[str] = None
         self.hosted_zone_name: Optional[str] = None
 
+
     def setup_certbot_credentials(self) -> bool:
         """Setup AWS credentials file for certbot.
 
@@ -52,57 +52,9 @@ class Route53DNSProvider(DNSProvider):
         Using this strategy we can impose least permissive and fast expiring access
         to our domain.
 
-        Credentials are in environment variables, we'll create the credentials file.
         """
-        aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
-        aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-
-        if not aws_access_key or not aws_secret_key:
-            # Assume IAM role or credentials file already exists
-            print("Using existing AWS credentials (IAM role or credentials file)")
-            return True
-
-        credentials_file = os.path.expanduser(self.AWS_CREDENTIALS_FILE)
-        config_file = os.path.expanduser(self.AWS_CONFIG_FILE)
-
-        aws_role_arn = os.getenv('AWS_ROLE_ARN')
-        aws_region = os.getenv('AWS_REGION', 'us-east-1')
-
-        credentials_dir = os.path.dirname(credentials_file)
 
         try:
-            # Create credentials directory
-            os.makedirs(credentials_dir, exist_ok=True)
-
-            if os.path.exists(credentials_file):
-                print(f"AWS credentials file already exists: {credentials_file}")
-
-            else:
-                # Write credentials file in AWS INI format
-                with open(credentials_file, "w") as f:
-                    f.write("[certbot-source]\n")
-                    f.write(f"aws_access_key_id = {aws_access_key}\n")
-                    f.write(f"aws_secret_access_key = {aws_secret_key}\n")
-
-                # Set secure permissions
-                os.chmod(credentials_file, 0o600)
-                print(f"AWS credentials file created: {credentials_file}")
-
-            if os.path.exists(credentials_file):
-                print(f"AWS config file already exists: {config_file}")
-
-            else:
-                # Write config file in AWS INI format
-                with open(config_file, "w") as f:
-                    f.write("[profile certbot]\n")
-                    f.write(f"role_arn={aws_role_arn}\n")
-                    f.write("source_profile=certbot-source\n")
-                    f.write(f"region={aws_region}\n")
-
-                # Set secure permissions
-                os.chmod(credentials_file, 0o600)
-                print(f"AWS config file created: {config_file}")
-
             # Pre-fetch hosted zone ID if we have a domain
             domain = os.getenv("DOMAIN")
             if domain:

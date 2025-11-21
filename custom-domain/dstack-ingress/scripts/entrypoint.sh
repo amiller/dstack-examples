@@ -65,6 +65,26 @@ setup_certbot_env() {
     # shellcheck disable=SC1091
     source /opt/app-venv/bin/activate
 
+    if [ "${DNS_PROVIDER}" = "route53" ]; then
+      mkdir -p /root/.aws
+
+      cat <<EOF >/root/.aws/config
+[profile certbot]
+role_arn=${AWS_ROLE_ARN}
+source_profile=certbot-source
+region=${AWS_REGION:-us-east-1}
+EOF
+
+      cat <<EOF >/root/.aws/credentials
+[certbot-source]
+aws_access_key_id=${AWS_ACCESS_KEY_ID}
+aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}
+EOF
+
+      unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+      export AWS_PROFILE=certbot
+    fi
+
     # Use the unified certbot manager to install plugins and setup credentials
     echo "Installing DNS plugins and setting up credentials"
     certman.py setup
