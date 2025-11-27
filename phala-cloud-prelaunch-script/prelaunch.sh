@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "----------------------------------------------"
-echo "Running Phala Cloud Pre-Launch Script v0.0.10"
+echo "Running Phala Cloud Pre-Launch Script v0.0.11"
 echo "----------------------------------------------"
 set -e
 
@@ -160,19 +160,29 @@ else
     echo "Root password already set; no changes."
 fi
 
+mkdir -p /home/root/.ssh
 if [[ -n "$DSTACK_ROOT_PUBLIC_KEY" ]]; then
-    mkdir -p /home/root/.ssh
     echo "$DSTACK_ROOT_PUBLIC_KEY" > /home/root/.ssh/authorized_keys
     unset $DSTACK_ROOT_PUBLIC_KEY
     echo "Root public key set"
 fi
 if [[ -n "$DSTACK_AUTHORIZED_KEYS" ]]; then
-    mkdir -p /home/root/.ssh
     echo "$DSTACK_AUTHORIZED_KEYS" > /home/root/.ssh/authorized_keys
     unset $DSTACK_AUTHORIZED_KEYS
     echo "Root authorized_keys set"
 fi
 
+if [[ -f /dstack/user_config ]] && jq empty /dstack/user_config 2>/dev/null; then
+    if [[ $(jq 'has("ssh_authorized_keys")' /dstack/user_config 2>/dev/null) == "true" ]]; then
+        jq -j '.ssh_authorized_keys' /dstack/user_config >> /home/root/.ssh/authorized_keys
+        # Remove duplicates if there are multiple keys
+        if [[ $(cat /home/root/.ssh/authorized_keys | wc -l) -gt 1 ]]; then
+            sort -u /home/root/.ssh/authorized_keys > /home/root/.ssh/authorized_keys.tmp
+            mv /home/root/.ssh/authorized_keys.tmp /home/root/.ssh/authorized_keys
+        fi
+        echo "Set root authorized_keys from user preferences, total" $(cat /home/root/.ssh/authorized_keys | wc -l) "keys"
+    fi
+fi
 
 if [[ -S /var/run/dstack.sock ]]; then
     export DSTACK_APP_ID=$(curl -s --unix-socket /var/run/dstack.sock http://dstack/Info | jq -j .app_id)
