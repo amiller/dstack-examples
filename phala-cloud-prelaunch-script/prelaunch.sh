@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "----------------------------------------------"
-echo "Running Phala Cloud Pre-Launch Script v0.0.8"
+echo "Running Phala Cloud Pre-Launch Script v0.0.11"
 echo "----------------------------------------------"
 set -e
 
@@ -136,36 +136,73 @@ fi
 perform_cleanup
 
 #
-# Set root password if DSTACK_ROOT_PASSWORD is set.
+# Set root password.
 #
-if [[ -n "$DSTACK_ROOT_PASSWORD" ]]; then
-    echo "$DSTACK_ROOT_PASSWORD" | passwd --stdin root 2>/dev/null || echo -e "$DSTACK_ROOT_PASSWORD\n$DSTACK_ROOT_PASSWORD" | passwd root
-    unset $DSTACK_ROOT_PASSWORD
-    echo "Root password set"
+if [ -n "$DSTACK_ROOT_PASSWORD" ]; then
+    echo "$DSTACK_ROOT_PASSWORD" | passwd --stdin root 2>/dev/null \
+        || printf '%s\n%s\n' "$DSTACK_ROOT_PASSWORD" "$DSTACK_ROOT_PASSWORD" | passwd root
+    unset DSTACK_ROOT_PASSWORD
+    echo "Root password set/updated from DSTACK_ROOT_PASSWORD"
+
+elif [ -z "$(grep '^root:' /etc/shadow 2>/dev/null | cut -d: -f2)" ]; then
+    DSTACK_ROOT_PASSWORD=$(
+        dd if=/dev/urandom bs=32 count=1 2>/dev/null \
+        | sha256sum \
+        | awk '{print $1}' \
+        | cut -c1-32
+    )
+    echo "$DSTACK_ROOT_PASSWORD" | passwd --stdin root 2>/dev/null \
+        || printf '%s\n%s\n' "$DSTACK_ROOT_PASSWORD" "$DSTACK_ROOT_PASSWORD" | passwd root
+    unset DSTACK_ROOT_PASSWORD
+    echo "Root password set (random auto-init)"
+
+else
+    echo "Root password already set; no changes."
 fi
+
+mkdir -p /home/root/.ssh
 if [[ -n "$DSTACK_ROOT_PUBLIC_KEY" ]]; then
-    mkdir -p /root/.ssh
-    echo "$DSTACK_ROOT_PUBLIC_KEY" > /root/.ssh/authorized_keys
+    echo "$DSTACK_ROOT_PUBLIC_KEY" > /home/root/.ssh/authorized_keys
     unset $DSTACK_ROOT_PUBLIC_KEY
     echo "Root public key set"
 fi
 if [[ -n "$DSTACK_AUTHORIZED_KEYS" ]]; then
-    mkdir -p /root/.ssh
-    echo "$DSTACK_AUTHORIZED_KEYS" > /root/.ssh/authorized_keys
+    echo "$DSTACK_AUTHORIZED_KEYS" > /home/root/.ssh/authorized_keys
     unset $DSTACK_AUTHORIZED_KEYS
     echo "Root authorized_keys set"
 fi
 
+if [[ -f /dstack/user_config ]] && jq empty /dstack/user_config 2>/dev/null; then
+    if [[ $(jq 'has("ssh_authorized_keys")' /dstack/user_config 2>/dev/null) == "true" ]]; then
+        jq -j '.ssh_authorized_keys' /dstack/user_config >> /home/root/.ssh/authorized_keys
+        # Remove duplicates if there are multiple keys
+        if [[ $(cat /home/root/.ssh/authorized_keys | wc -l) -gt 1 ]]; then
+            sort -u /home/root/.ssh/authorized_keys > /home/root/.ssh/authorized_keys.tmp
+            mv /home/root/.ssh/authorized_keys.tmp /home/root/.ssh/authorized_keys
+        fi
+        echo "Set root authorized_keys from user preferences, total" $(cat /home/root/.ssh/authorized_keys | wc -l) "keys"
+    fi
+fi
 
 if [[ -S /var/run/dstack.sock ]]; then
     export DSTACK_APP_ID=$(curl -s --unix-socket /var/run/dstack.sock http://dstack/Info | jq -j .app_id)
 elif [[ -S /var/run/tappd.sock ]]; then
     export DSTACK_APP_ID=$(curl -s --unix-socket /var/run/tappd.sock http://dstack/prpc/Tappd.Info | jq -j .app_id)
 fi
-# Check if app-compose.json has default_gateway_domain field and DSTACK_GATEWAY_DOMAIN is not set
-# If true, set DSTACK_GATEWAY_DOMAIN from app-compose.json
-if [[ $(jq 'has("default_gateway_domain")' app-compose.json) == "true" && -z "$DSTACK_GATEWAY_DOMAIN" ]]; then
-    export DSTACK_GATEWAY_DOMAIN=$(jq -j '.default_gateway_domain' app-compose.json)
+# Check if DSTACK_GATEWAY_DOMAIN is not set, try to get it from user_config or app-compose.json
+# Priority: user_config > app-compose.json
+if [[ -z "$DSTACK_GATEWAY_DOMAIN" ]]; then
+    # First try to get from /dstack/user_config if it exists and is valid JSON
+    if [[ -f /dstack/user_config ]] && jq empty /dstack/user_config 2>/dev/null; then
+        if [[ $(jq 'has("default_gateway_domain")' /dstack/user_config 2>/dev/null) == "true" ]]; then
+            export DSTACK_GATEWAY_DOMAIN=$(jq -j '.default_gateway_domain' /dstack/user_config)
+        fi
+    fi
+
+    # If still not set, try to get from app-compose.json
+    if [[ -z "$DSTACK_GATEWAY_DOMAIN" ]] && [[ $(jq 'has("default_gateway_domain")' app-compose.json) == "true" ]]; then
+        export DSTACK_GATEWAY_DOMAIN=$(jq -j '.default_gateway_domain' app-compose.json)
+    fi
 fi
 if [[ -n "$DSTACK_GATEWAY_DOMAIN" ]]; then
     export DSTACK_APP_DOMAIN=$DSTACK_APP_ID"."$DSTACK_GATEWAY_DOMAIN
