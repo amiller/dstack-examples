@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "----------------------------------------------"
-echo "Running Phala Cloud Pre-Launch Script v0.0.11"
+echo "Running Phala Cloud Pre-Launch Script v0.0.12"
 echo "----------------------------------------------"
 set -e
 
@@ -138,50 +138,95 @@ perform_cleanup
 #
 # Set root password.
 #
-if [ -n "$DSTACK_ROOT_PASSWORD" ]; then
-    echo "$DSTACK_ROOT_PASSWORD" | passwd --stdin root 2>/dev/null \
-        || printf '%s\n%s\n' "$DSTACK_ROOT_PASSWORD" "$DSTACK_ROOT_PASSWORD" | passwd root
-    unset DSTACK_ROOT_PASSWORD
-    echo "Root password set/updated from DSTACK_ROOT_PASSWORD"
+echo "Setting root password.."
 
-elif [ -z "$(grep '^root:' /etc/shadow 2>/dev/null | cut -d: -f2)" ]; then
-    DSTACK_ROOT_PASSWORD=$(
-        dd if=/dev/urandom bs=32 count=1 2>/dev/null \
-        | sha256sum \
-        | awk '{print $1}' \
-        | cut -c1-32
-    )
-    echo "$DSTACK_ROOT_PASSWORD" | passwd --stdin root 2>/dev/null \
-        || printf '%s\n%s\n' "$DSTACK_ROOT_PASSWORD" "$DSTACK_ROOT_PASSWORD" | passwd root
-    unset DSTACK_ROOT_PASSWORD
-    echo "Root password set (random auto-init)"
+# Check if password files are writable
+PASSWD_WRITABLE=true
+if [ ! -w /etc/passwd ]; then
+    echo "Warning: /etc/passwd is read-only"
+    PASSWD_WRITABLE=false
+fi
+if [ ! -w /etc/shadow ]; then
+    echo "Warning: /etc/shadow is read-only"
+    PASSWD_WRITABLE=false
+fi
 
+if [ "$PASSWD_WRITABLE" = "false" ]; then
+    echo "Skipping password setup due to read-only file system"
 else
-    echo "Root password already set; no changes."
-fi
+    # Check if chpasswd is available
+    if command -v chpasswd >/dev/null 2>&1; then
+        echo "Using chpasswd method"
 
-mkdir -p /home/root/.ssh
-if [[ -n "$DSTACK_ROOT_PUBLIC_KEY" ]]; then
-    echo "$DSTACK_ROOT_PUBLIC_KEY" > /home/root/.ssh/authorized_keys
-    unset $DSTACK_ROOT_PUBLIC_KEY
-    echo "Root public key set"
-fi
-if [[ -n "$DSTACK_AUTHORIZED_KEYS" ]]; then
-    echo "$DSTACK_AUTHORIZED_KEYS" > /home/root/.ssh/authorized_keys
-    unset $DSTACK_AUTHORIZED_KEYS
-    echo "Root authorized_keys set"
-fi
-
-if [[ -f /dstack/user_config ]] && jq empty /dstack/user_config 2>/dev/null; then
-    if [[ $(jq 'has("ssh_authorized_keys")' /dstack/user_config 2>/dev/null) == "true" ]]; then
-        jq -j '.ssh_authorized_keys' /dstack/user_config >> /home/root/.ssh/authorized_keys
-        # Remove duplicates if there are multiple keys
-        if [[ $(cat /home/root/.ssh/authorized_keys | wc -l) -gt 1 ]]; then
-            sort -u /home/root/.ssh/authorized_keys > /home/root/.ssh/authorized_keys.tmp
-            mv /home/root/.ssh/authorized_keys.tmp /home/root/.ssh/authorized_keys
+        if [ -n "$DSTACK_ROOT_PASSWORD" ]; then
+            echo "Setting root password from user.."
+            echo "root:$DSTACK_ROOT_PASSWORD" | chpasswd
+            unset DSTACK_ROOT_PASSWORD
+            echo "Root password set/updated from DSTACK_ROOT_PASSWORD"
+        elif [ -z "$(grep '^root:' /etc/shadow 2>/dev/null | cut -d: -f2)" ]; then
+            echo "Setting random root password.."
+            DSTACK_ROOT_PASSWORD=$(
+                LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | dd bs=1 count=32 2>/dev/null
+            )
+            echo "root:$DSTACK_ROOT_PASSWORD" | chpasswd
+            unset DSTACK_ROOT_PASSWORD
+            echo "Root password set (random auto-init)"
+        else
+            echo "Root password already set; no changes."
         fi
-        echo "Set root authorized_keys from user preferences, total" $(cat /home/root/.ssh/authorized_keys | wc -l) "keys"
+    else
+        echo "Using passwd method"
+
+        if [ -n "$DSTACK_ROOT_PASSWORD" ]; then
+            echo "Setting root password from user.."
+            echo "$DSTACK_ROOT_PASSWORD" | passwd --stdin root 2>/dev/null \
+                || printf '%s\n%s\n' "$DSTACK_ROOT_PASSWORD" "$DSTACK_ROOT_PASSWORD" | passwd root
+            unset DSTACK_ROOT_PASSWORD
+            echo "Root password set/updated from DSTACK_ROOT_PASSWORD"
+        elif [ -z "$(grep '^root:' /etc/shadow 2>/dev/null | cut -d: -f2)" ]; then
+            echo "Setting random root password.."
+            DSTACK_ROOT_PASSWORD=$(
+                LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | dd bs=1 count=32 2>/dev/null
+            )
+            echo "$DSTACK_ROOT_PASSWORD" | passwd --stdin root 2>/dev/null \
+                || printf '%s\n%s\n' "$DSTACK_ROOT_PASSWORD" "$DSTACK_ROOT_PASSWORD" | passwd root
+            unset DSTACK_ROOT_PASSWORD
+            echo "Root password set (random auto-init)"
+        else
+            echo "Root password already set; no changes."
+        fi
     fi
+fi
+
+#
+# Set SSH authorized keys
+#
+if mkdir -p /home/root/.ssh 2>/dev/null; then
+    if [[ -n "$DSTACK_ROOT_PUBLIC_KEY" ]]; then
+        echo "$DSTACK_ROOT_PUBLIC_KEY" > /home/root/.ssh/authorized_keys
+        unset $DSTACK_ROOT_PUBLIC_KEY
+        echo "Root public key set"
+    fi
+    if [[ -n "$DSTACK_AUTHORIZED_KEYS" ]]; then
+        echo "$DSTACK_AUTHORIZED_KEYS" > /home/root/.ssh/authorized_keys
+        unset $DSTACK_AUTHORIZED_KEYS
+        echo "Root authorized_keys set"
+    fi
+
+    if [[ -f /dstack/user_config ]] && jq empty /dstack/user_config 2>/dev/null; then
+        if [[ $(jq 'has("ssh_authorized_keys")' /dstack/user_config 2>/dev/null) == "true" ]]; then
+            jq -j '.ssh_authorized_keys' /dstack/user_config >> /home/root/.ssh/authorized_keys
+            # Remove duplicates if there are multiple keys
+            if [[ $(cat /home/root/.ssh/authorized_keys | wc -l) -gt 1 ]]; then
+                sort -u /home/root/.ssh/authorized_keys > /home/root/.ssh/authorized_keys.tmp
+                mv /home/root/.ssh/authorized_keys.tmp /home/root/.ssh/authorized_keys
+            fi
+            echo "Set root authorized_keys from user preferences, total" $(cat /home/root/.ssh/authorized_keys | wc -l) "keys"
+        fi
+    fi
+else
+    echo "Warning: Cannot create /home/root/.ssh directory (read-only file system?)"
+    echo "Skipping SSH key setup"
 fi
 
 if [[ -S /var/run/dstack.sock ]]; then
