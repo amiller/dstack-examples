@@ -9,7 +9,7 @@
 
 **Example applications for [dstack](https://github.com/Dstack-TEE/dstack) - Deploy containerized apps to TEEs with end-to-end security in minutes**
 
-[Use Cases](#use-cases) • [Core Patterns](#core-patterns) • [Dev Tools](#dev-scaffolding) • [Documentation](#documentation)
+[Getting Started](#getting-started) • [Use Cases](#use-cases) • [Core Patterns](#core-patterns) • [Dev Tools](#dev-scaffolding) • [Other Use Cases](#other-use-cases)
 
 </div>
 
@@ -19,17 +19,45 @@
 
 This repository contains ready-to-deploy examples demonstrating how to build and run applications on [dstack](https://github.com/Dstack-TEE/dstack), the developer-friendly SDK for deploying containerized apps in Trusted Execution Environments (TEE).
 
-## Prerequisites
+## Getting Started
 
-- Access to a dstack environment (self-hosted or [Phala Cloud](https://cloud.phala.network))
-- Basic understanding of [TEE concepts](https://docs.phala.network/dstack)
-- Basic familiarity with Docker Compose
-- Git for cloning the repository
+### Prerequisites
+
+- Docker and Docker Compose
+- Node.js (for Phala CLI)
+- Git
+
+### Setup
 
 ```bash
+# Clone the repo
 git clone https://github.com/Dstack-TEE/dstack-examples.git
 cd dstack-examples
+
+# Install Phala CLI
+npm install -g phala
+
+# Start the local simulator (no TEE hardware needed)
+phala simulator start
 ```
+
+### Run an Example Locally
+
+```bash
+cd attestation-with-sdk
+docker compose run --rm \
+  -v ~/.phala-cloud/simulator/0.5.3/dstack.sock:/var/run/dstack.sock \
+  app
+```
+
+### Deploy to Phala Cloud
+
+```bash
+phala auth login
+phala deploy -n my-app -c docker-compose.yaml
+```
+
+See [Phala Cloud](https://cloud.phala.network) for production TEE deployment.
 
 ---
 
@@ -52,14 +80,26 @@ Key building blocks for dstack applications.
 
 ### Attestation
 
-How to get and verify TEE attestations.
+Request TEE attestations via the SDK. Mount `/var/run/dstack.sock` in your compose file to access the TEE.
+
+```javascript
+import { DstackClient } from '@phala/dstack-sdk'
+const client = new DstackClient()
+const info = await client.info()              // app_id, instance_id, tcb_info
+const quote = await client.getQuote(data)     // TDX quote with custom report_data
+const key = await client.getKey('/my/path')   // deterministic key derivation
+```
+
+```yaml
+volumes:
+  - /var/run/dstack.sock:/var/run/dstack.sock
+```
 
 | Example | Description | Status |
 |---------|-------------|--------|
-| [trust-center](./refs/trust-center) | Full attestation verification platform — **start here** for production attestation patterns | Reference |
-| [attestation-sdk](./attestation-sdk) | Using Dstack client SDK to fetch attestations | Coming Soon |
-| [timelock-nts](./timelock-nts) | Shows raw `/var/run/dstack.sock` usage (what the SDK wraps) | Available |
-| [attestation/configid-based](./attestation/configid-based) | ConfigID-based verification (demonstrates current format) | Available |
+| [attestation-with-sdk](./attestation-with-sdk) | Complete SDK example with HTTP server | Available |
+| [timelock-nts](./timelock-nts) | Raw socket usage (what the SDK wraps) | Available |
+| [attestation/configid-based](./attestation/configid-based) | ConfigID-based verification | Available |
 
 ### Gateway & Domains
 
@@ -107,6 +147,27 @@ Interesting demonstrations.
 | Example | Description |
 |---------|-------------|
 | [tor-hidden-service](./tor-hidden-service) | Run Tor hidden services in TEEs |
+
+---
+
+## Other Use Cases
+
+External projects and templates worth exploring. These are maintained elsewhere but demonstrate interesting TEE patterns.
+
+| Project | Description | Link |
+|---------|-------------|------|
+| **Oracle Template** | Price aggregator with verifiable networking (hardened TLS) and multi-source validation | [Gldywn/phala-cloud-oracle-template](https://github.com/Gldywn/phala-cloud-oracle-template) |
+| **VRF Template** | Verifiable Random Function — hardware-backed cryptographic randomness | [Phala-Network/phala-cloud-vrf-template](https://github.com/Phala-Network/phala-cloud-vrf-template) |
+| **Open WebUI** | Self-hosted AI chat interface in TEE | [phala-cloud/templates/openwebui](https://github.com/Phala-Network/phala-cloud/tree/main/templates/prebuilt/openwebui) |
+| **n8n Automation** | Workflow automation (400+ integrations) with OAuth in TEE | [Marvin-Cypher/phala-n8n-template](https://github.com/Marvin-Cypher/phala-n8n-template) |
+| **Primus Attestor** | zkTLS node — TEE + zero-knowledge proofs | [primus-labs/primus-network-startup](https://github.com/primus-labs/primus-network-startup) |
+| **NEAR Shade Agent** | Blockchain oracle/agent for NEAR with TEE attestation | [phala-cloud/templates/near-shade-agent](https://github.com/Phala-Network/phala-cloud/tree/main/templates/prebuilt/near-shade-agent) |
+| **Presidio** | Microsoft's PII de-identification running in TEE | [HashWarlock/presidio](https://github.com/HashWarlock/presidio/tree/phala-cloud) |
+| **ByteBot** | AI desktop agent — computer control in isolated TEE sandbox | [phala-cloud/templates/bytebot](https://github.com/Phala-Network/phala-cloud/tree/main/templates/prebuilt/bytebot) |
+
+> **Note**: These templates use pre-built Docker images. For full auditability, review their source repos before deployment.
+
+See the full [Phala Cloud templates](https://github.com/Phala-Network/phala-cloud#templates) for more options.
 
 ---
 
