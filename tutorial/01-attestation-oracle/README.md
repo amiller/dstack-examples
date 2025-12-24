@@ -66,61 +66,19 @@ phala deploy -n tee-oracle -c docker-compose.yaml
 
 ## Verification
 
-To trust the oracle's output, verify:
+The quote contains measured values. Compare them against reference values you trust:
 
-1. **Quote is valid** — Hardware signature, OS integrity, compose hash
-2. **report_data matches** — `sha256(statement) == reportDataHash` in quote
-3. **TLS fingerprint is correct** — Matches the real CoinGecko certificate
+| Measured (from quote) | Reference | Source |
+|-----------------------|-----------|--------|
+| Intel signature | Intel root CA | Built into dcap-qvl |
+| MRTD, RTMR0-2 | Calculated from OS image | Download from [meta-dstack releases](https://github.com/Dstack-TEE/meta-dstack/releases) |
+| compose-hash (RTMR3) | `sha256(app-compose.json)` | Build from your docker-compose.yaml |
+| report_data | `sha256(statement)` | Hash the statement yourself |
+| tlsFingerprint | Certificate fingerprint | Fetch from api.coingecko.com |
 
-### Step 1: Verify the Quote
+### Step 1: Validate Quote and Compare Measurements
 
-The TDX quote proves the statement came from verified TEE code. Choose a verification method:
-
-#### Option A: Hosted (no setup)
-
-Visit [trust.phala.network](https://trust.phala.network) and enter your app's domain. It shows verification status for all Phala Cloud apps.
-
-#### Option B: Local script (recommended)
-
-Use the self-contained verification script from [attestation/configid-based](../../attestation/configid-based):
-
-```bash
-cd attestation/configid-based
-
-# Download verification tools (dcap-qvl, dstack-mr, OS image)
-./attest.sh download
-
-# Calculate expected measurements from your compose file
-./attest.sh compose
-./attest.sh calc-mrs
-
-# Verify a running app's quote
-./attest.sh verify
-```
-
-This compares:
-- **mr_config_id**: Contains your compose hash (SHA-256 padded to 96 chars)
-- **MRTD/RTMR0-2**: Match expected values from [dstack OS release](https://github.com/Dstack-TEE/meta-dstack/releases)
-- **Hardware signature**: Validated by Intel DCAP-QVL
-
-#### Option C: Programmatic (trust-center API)
-
-For integration into your own verification flow:
-
-```bash
-git clone https://github.com/Phala-Network/trust-center.git
-cd trust-center && bun install
-cd packages/verifier && bun run dev
-
-# Then call the API
-curl -X POST http://localhost:3000/verify \
-  -H "Content-Type: application/json" \
-  -d '{"appId": "<app-id>", "domain": "your-app.phala.network"}'
-```
-
-#### Option D: Python script (verify_full.py)
-
-A standalone Python script included in this tutorial:
+Use the included Python script:
 
 ```bash
 # Install verification tools
@@ -155,7 +113,7 @@ Output:
 
 ---
 
-> **How verification proves code correspondence**
+> **About compose-hash**
 >
 > Your `docker-compose.yaml` gets wrapped into an `app-compose.json` manifest:
 > ```json
@@ -163,25 +121,14 @@ Output:
 >   "docker_compose_file": "<your compose content>",
 >   "pre_launch_script": "#!/bin/bash\n...",
 >   "kms_enabled": true,
->   "gateway_enabled": true,
 >   ...
 > }
 > ```
-> The SHA-256 of this manifest becomes the **compose-hash**, which is embedded in `mr_config_id` in the TDX quote.
+> The SHA-256 of this manifest is the **compose-hash** in RTMR3.
 >
-> **Important:** The `pre_launch_script` is included in the hash. Phala Cloud injects its own prelaunch script (for SSH setup, environment config, etc.). To fully audit, you need the complete `app-compose.json` — fetch it via `phala cvms attestation <app>` or from trust-center's output. See [prelaunch-script](../../prelaunch-script) for the Phala Cloud script source.
+> **Important:** The `pre_launch_script` is included in the hash. Phala Cloud injects its own prelaunch script. To audit, fetch the complete `app-compose.json` via `phala cvms attestation <app>`. See [prelaunch-script](../../prelaunch-script) for the Phala Cloud script source.
 >
-> To verify a remote app matches your local code:
-> 1. Build `app-compose.json` from your docker-compose (attest.sh `compose` does this)
-> 2. Calculate `sha256(app-compose.json)` → your expected compose-hash
-> 3. Get the remote app's quote and extract `mr_config_id`
-> 4. Compare: if `mr_config_id` starts with your compose-hash, the app is running your code
->
-> **trust-center vs attest.sh:**
-> - **attest.sh**: You provide compose file + OS version. Fully local — downloads binaries (dcap-qvl, dstack-mr) and OS image from GitHub, calculates measurements, compares with quote. Works against any dstack instance.
-> - **trust-center**: You provide appId/domain. Hybrid — fetches app metadata from Phala Cloud API (`cloud-api.phala.network`) and quote from the app's RPC endpoint, but runs verification (dcap-qvl, dstack-mr) locally. Downloads OS images from GitHub. Easier discovery but relies on Phala Cloud API for app lookup.
->
-> See [attestation/configid-based](../../attestation/configid-based) for the standalone verification script.
+> For standalone verification that builds app-compose.json locally: [attestation/configid-based](../../attestation/configid-based)
 
 ### Step 2: Verify report_data Binding
 
@@ -209,19 +156,6 @@ echo | openssl s_client -connect api.coingecko.com:443 2>/dev/null | \
 # Compare with statement.tlsFingerprint
 cat response.json | jq -r '.statement.tlsFingerprint'
 ```
-
----
-
-## What This Proves
-
-When all three checks pass:
-
-1. **The code is correct** — Trust-center verified the docker-compose.yaml hash matches what's deployed
-2. **The TEE is authentic** — Intel hardware signed the quote
-3. **The statement is genuine** — report_data binds the exact statement to the quote
-4. **The data source is real** — TLS fingerprint proves connection to the actual API server
-
-This is the complete verification chain for a TEE oracle.
 
 ---
 
