@@ -9,7 +9,7 @@
 
 **Example applications for [dstack](https://github.com/Dstack-TEE/dstack) - Deploy containerized apps to TEEs with end-to-end security in minutes**
 
-[Getting Started](#getting-started) • [Use Cases](#use-cases) • [Core Patterns](#core-patterns) • [Dev Tools](#dev-scaffolding) • [Other Use Cases](#other-use-cases)
+[Getting Started](#getting-started) • [Use Cases](#use-cases) • [Core Patterns](#core-patterns) • [Dev Tools](#dev-scaffolding) • [Starter Packs](#starter-packs) • [Other Use Cases](#other-use-cases)
 
 </div>
 
@@ -44,7 +44,7 @@ phala simulator start
 ### Run an Example Locally
 
 ```bash
-cd attestation-with-sdk
+cd tutorial/01-attestation-oracle
 docker compose run --rm \
   -v ~/.phala-cloud/simulator/0.5.3/dstack.sock:/var/run/dstack.sock \
   app
@@ -58,6 +58,19 @@ phala deploy -n my-app -c docker-compose.yaml
 ```
 
 See [Phala Cloud](https://cloud.phala.network) for production TEE deployment.
+
+---
+
+## Tutorials
+
+Step-by-step guides covering core dstack concepts.
+
+| Tutorial | Description |
+|----------|-------------|
+| [01-attestation-oracle](./tutorial/01-attestation-oracle) | Use the guest SDK to work with attestations directly — build an oracle, bind data to TDX quotes via `report_data`, verify with local scripts |
+| [02-persistence-and-kms](./tutorial/02-persistence-and-kms) | Use `getKey()` for deterministic key derivation from a KMS — persistent wallets, same key across restarts |
+| [03-gateway-and-ingress](./tutorial/03-gateway-and-ingress) | Custom domains with automatic SSL, certificate evidence chain |
+| [04-upgrades](./tutorial/04-upgrades) | Extend `AppAuth.sol` with custom authorization logic — NFT-gated clusters, on-chain governance |
 
 ---
 
@@ -97,7 +110,6 @@ volumes:
 
 | Example | Description | Status |
 |---------|-------------|--------|
-| [attestation-with-sdk](./attestation-with-sdk) | Complete SDK example with HTTP server | Available |
 | [timelock-nts](./timelock-nts) | Raw socket usage (what the SDK wraps) | Available |
 | [attestation/configid-based](./attestation/configid-based) | ConfigID-based verification | Available |
 
@@ -147,6 +159,21 @@ Interesting demonstrations.
 | Example | Description |
 |---------|-------------|
 | [tor-hidden-service](./tor-hidden-service) | Run Tor hidden services in TEEs |
+
+---
+
+## Starter Packs
+
+Full-stack templates with SDK integration. These demonstrate attestation, key derivation, and wallet generation.
+
+| Template | Stack | Link |
+|----------|-------|------|
+| **Next.js Starter** | Next.js + TypeScript | [phala-cloud-nextjs-starter](https://github.com/Phala-Network/phala-cloud-nextjs-starter) |
+| **Python Starter** | FastAPI + Python | [phala-cloud-python-starter](https://github.com/Phala-Network/phala-cloud-python-starter) |
+| **Bun Starter** | Bun + TypeScript | [phala-cloud-bun-starter](https://github.com/Phala-Network/phala-cloud-bun-starter) |
+| **Node.js Starter** | Express + TypeScript | [phala-cloud-node-starter](https://github.com/Gldywn/phala-cloud-node-starter) |
+
+Features: `/api/tdx_quote` (attestation), `/api/eth_account` (derived wallet), `/api/info` (TCB info)
 
 ---
 
