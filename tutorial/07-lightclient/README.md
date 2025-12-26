@@ -1,4 +1,4 @@
-# Tutorial 06: Light Client Oracle
+# Tutorial 07: Light Client Oracle
 
 Read verified Ethereum state inside a TEE without trusting an RPC provider.
 
@@ -34,7 +34,7 @@ Read verified Ethereum state inside a TEE without trusting an RPC provider.
 
 ## Why this matters
 
-Unlike [05-onchain-oracle](../05-onchain-oracle) which fetches from off-chain APIs (CoinGecko), this reads directly from Ethereum state. Helios verifies state proofs internally, so you don't need to trust the RPC provider.
+Unlike [04-onchain-oracle](../04-onchain-oracle) which fetches from off-chain APIs (CoinGecko), this reads directly from Ethereum state. Helios verifies state proofs internally, so you don't need to trust the RPC provider.
 
 Use cases:
 - Attested `eth_call` results (token balances, contract state)
@@ -86,10 +86,10 @@ The example queries DAI's `totalSupply()` (`0x18160ddd`) but you can modify the 
 Two things to verify:
 
 1. **TDX quote** — proves this claim came from a TEE running this code
-   → See [01-attestation-oracle](../01-attestation-oracle) for `dcap-qvl` + `dstack-mr` verification
+   → See [01-attestation](../01-attestation) for `dcap-qvl` + `dstack-mr` verification
 
 2. **Signature** — signed with KMS-derived key, verifiable on-chain
-   → See [05-onchain-oracle](../05-onchain-oracle) for signature chain verification
+   → See [04-onchain-oracle](../04-onchain-oracle) for signature chain verification
 
 The `checkpoint_root` can be cross-checked against any beacon chain source (e.g., [beaconcha.in](https://beaconcha.in)).
 
@@ -101,7 +101,11 @@ The `checkpoint_root` can be cross-checked against any beacon chain source (e.g.
 ## Files
 
 ```
-06-lightclient-oracle/
+07-lightclient/
 ├── docker-compose.yaml  # Helios + oracle (self-contained)
 └── README.md
 ```
+
+## Next Steps
+
+- [08-extending-appauth](../08-extending-appauth): Custom authorization contracts

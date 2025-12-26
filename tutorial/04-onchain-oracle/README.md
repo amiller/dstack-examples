@@ -1,4 +1,4 @@
-# Tutorial 05: On-Chain Verifiable Oracle
+# Tutorial 04: On-Chain Verifiable Oracle
 
 Build an oracle that signs price data with TEE-derived keys, verifiable on-chain. This tutorial demonstrates the **AppAuth contract** architecture that controls which TEEs can get keys from KMS.
 
@@ -164,7 +164,7 @@ python3 test_local.py
 ## Files
 
 ```
-05-onchain-oracle/
+04-onchain-oracle/
 ├── docker-compose.yaml        # Oracle app
 ├── TeeOracle.sol              # On-chain signature verification
 ├── test_local.py              # Test with simulator
@@ -177,6 +177,11 @@ python3 test_local.py
 ├── NOTES.md                   # Troubleshooting & CLI limitations
 └── README.md
 ```
+
+## Next Steps
+
+- [05-hardening-https](../05-hardening-https): Strengthen TLS verification
+- [07-lightclient](../07-lightclient): Read verified blockchain state
 
 ## Contract Addresses
 

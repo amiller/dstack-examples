@@ -161,8 +161,8 @@ cat response.json | jq -r '.statement.tlsFingerprint'
 
 ## Next Steps
 
-- [02-persistence-and-kms](../02-persistence-and-kms): Derive persistent keys across restarts
-- [03-gateway-and-ingress](../03-gateway-and-ingress): Custom domains and TLS
+- [02-kms-and-signing](../02-kms-and-signing): Derive persistent keys and sign messages
+- [03-gateway-and-tls](../03-gateway-and-tls): Custom domains and TLS
 
 ## SDK Reference
 
@@ -172,7 +172,7 @@ cat response.json | jq -r '.statement.tlsFingerprint'
 ## Files
 
 ```
-01-attestation-oracle/
+01-attestation/
 ├── docker-compose.yaml  # Oracle app (self-contained)
 ├── verify_full.py       # Python verification script
 └── README.md            # This file

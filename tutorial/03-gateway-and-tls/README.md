@@ -87,8 +87,8 @@ This creates a verification chain: TDX quote → file hashes → certificate.
 
 ## Next Steps
 
-- [01-attestation-oracle](../01-attestation-oracle): Build verifiable apps
-- [02-persistence-and-kms](../02-persistence-and-kms): Persistent keys
+- [04-onchain-oracle](../04-onchain-oracle): Full oracle with on-chain verification
+- [05-hardening-https](../05-hardening-https): OCSP, CRL, and CT verification
 
 ## References
 

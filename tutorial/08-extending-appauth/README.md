@@ -1,4 +1,4 @@
-# Tutorial 04: Upgrades and Custom Authorization
+# Tutorial 08: Upgrades and Custom Authorization
 
 Extend the `AppAuth` contract with custom authorization logic for your dstack apps.
 
@@ -175,5 +175,5 @@ For Phala Cloud's on-chain KMS, see [Cloud vs On-chain KMS](https://docs.phala.n
 
 ## Next Steps
 
-- [01-attestation-oracle](../01-attestation-oracle): Understand attestation verification
-- [02-persistence-and-kms](../02-persistence-and-kms): How apps derive keys from KMS
+- [01-attestation](../01-attestation): Understand attestation verification
+- [02-kms-and-signing](../02-kms-and-signing): How apps derive keys from KMS
