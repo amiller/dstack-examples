@@ -156,6 +156,10 @@ For browser-friendly TLS without certificate warnings, you can use Let's Encrypt
 
 This flow works for real TEE deployments where you can't run commands inside the enclave. The attestation binding still applies - the LE cert fingerprint is included in the quote.
 
+## Exercise: UDP Hole Punching
+
+For direct peer-to-peer connectivity without any relay, UDP hole punching with WireGuard can establish direct connections between TEEs. See [WIP: p2p-wg](https://github.com/amiller/dstack-examples/tree/holepunch/p2p-wg) for an experimental implementation.
+
 ## Next Steps
 
 - [04-onchain-oracle](../04-onchain-oracle): On-chain verification
