@@ -1,10 +1,10 @@
-# Tutorial 03: TLS and Connectivity
+# Tutorial 04: Gateways and TLS
 
 Self-signed TLS with attestation-bound certificates, exposed via ngrok TCP tunnel.
 
 ## Prerequisites
 
-Complete [01-attestation](../01-attestation) first.
+Complete [01-attestation-and-reference-values](../01-attestation-and-reference-values) first.
 
 ## The Problem
 
@@ -162,4 +162,4 @@ For direct peer-to-peer connectivity without any relay, UDP hole punching with W
 
 ## Next Steps
 
-- [04-onchain-oracle](../04-onchain-oracle): On-chain verification
+- [05-onchain-authorization](../05-onchain-authorization): On-chain verification

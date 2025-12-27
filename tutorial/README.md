@@ -54,7 +54,7 @@ Each section adds a layer until we have a fully DevProof oracle.
 | Docker | Run apps | [docker.com](https://docker.com) |
 | Phala CLI | Simulator + deploy | `npm install -g @phala/cloud-cli` |
 | Python 3 | Test scripts | System package |
-| Foundry | On-chain testing (04) | [getfoundry.sh](https://getfoundry.sh) |
+| Foundry | On-chain testing (05) | [getfoundry.sh](https://getfoundry.sh) |
 
 ### Local Development (Simulator)
 
@@ -63,7 +63,7 @@ Each section adds a layer until we have a fully DevProof oracle.
 phala simulator start
 
 # Run any tutorial section
-cd 02-kms-and-signing
+cd 03-keys-and-replication
 docker compose build
 docker compose run --rm -p 8080:8080 \
   -v ~/.phala-cloud/simulator/0.5.3/dstack.sock:/var/run/dstack.sock \
@@ -81,7 +81,7 @@ The simulator provides:
 
 ### On-Chain Testing (Anvil)
 
-For [04-onchain-oracle](./04-onchain-oracle), use anvil for local contract testing:
+For [05-onchain-authorization](./05-onchain-authorization), use anvil for local contract testing:
 
 ```bash
 anvil &                    # Local Ethereum node
@@ -113,18 +113,18 @@ phala deploy -n my-app -c docker-compose.yaml
 
 ### Core Tutorial
 
-1. **[01-attestation](./01-attestation)** — Build a TEE oracle and verify its attestation end-to-end
-   - **[01a-reproducible-builds](./01a-reproducible-builds)** — Make builds verifiable for auditors
-2. **[02-kms-and-signing](./02-kms-and-signing)** — Derive persistent keys and verify signature chains
-3. **[03-gateway-and-tls](./03-gateway-and-tls)** — Self-signed TLS with attestation-bound certificates
-4. **[04-onchain-oracle](./04-onchain-oracle)** — AppAuth contracts and multi-node deployment
-5. **[05-hardening-https](./05-hardening-https)** — OCSP stapling, CRL checking, CT records
+1. **[01-attestation-and-reference-values](./01-attestation-and-reference-values)** — TEE quotes, measured values, and computing reference hashes
+2. **[02-bitrot-and-reproducibility](./02-bitrot-and-reproducibility)** — Deterministic builds that auditors can verify now and later
+3. **[03-keys-and-replication](./03-keys-and-replication)** — Persistent keys via KMS and multi-node deployments
+4. **[04-gateways-and-tls](./04-gateways-and-tls)** — Self-signed TLS with attestation-bound certificates
+5. **[05-onchain-authorization](./05-onchain-authorization)** — AppAuth contracts for on-chain key derivation control
+6. **[06-hardening-https](./06-hardening-https)** — OCSP stapling, CRL checking, CT records
 
 ### Advanced
 
-6. **[06-encryption-freshness](./06-encryption-freshness)** — Encrypted storage, integrity, rollback protection
-7. **[07-lightclient](./07-lightclient)** — Verified blockchain state via Helios light client
-8. **[08-extending-appauth](./08-extending-appauth)** — Custom authorization contracts (timelocks, NFT-gating, multisig)
+7. **[07-encryption-freshness](./07-encryption-freshness)** — Encrypted storage, integrity, rollback protection
+8. **[08-lightclient](./08-lightclient)** — Verified blockchain state via Helios light client
+9. **[09-extending-appauth](./09-extending-appauth)** — Custom authorization contracts (timelocks, NFT-gating, multisig)
 
 ---
 

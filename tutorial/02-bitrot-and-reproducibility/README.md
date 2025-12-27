@@ -1,4 +1,4 @@
-# Tutorial 01a: Reproducible Builds
+# Tutorial 02: Bitrot and Reproducibility
 
 Make your TEE app verifiable by auditors—now and in the future.
 
@@ -8,13 +8,13 @@ This tutorial covers:
 - Testing reproducibility locally and remotely
 - Protecting against bitrot
 
-**Prerequisite:** Read [01-attestation](../01-attestation) first to understand the auditor's perspective.
+**Prerequisite:** Read [01-attestation-and-reference-values](../01-attestation-and-reference-values) first to understand the auditor's perspective.
 
 ---
 
 ## The Developer's Challenge
 
-In [01-attestation](../01-attestation), we saw what auditors demand:
+In [01-attestation-and-reference-values](../01-attestation-and-reference-values), we saw what auditors demand:
 
 1. Source code
 2. Build instructions
@@ -383,14 +383,14 @@ Before claiming your app is auditable:
 
 ## Next Steps
 
-- [02-kms-and-signing](../02-kms-and-signing): Derive persistent keys
-- [03-gateway-and-tls](../03-gateway-and-tls): Custom domains and TLS
+- [03-keys-and-replication](../03-keys-and-replication): Derive persistent keys
+- [04-gateways-and-tls](../04-gateways-and-tls): Custom domains and TLS
 - For Nix-based reproducible builds, see the [reproducible-builds-playground](../../refs/reproducible-builds-playground)
 
 ## Files
 
 ```
-01a-reproducible-builds/
+02-bitrot-and-reproducibility/
 ├── docker-compose.yaml     # Reproducible compose
 ├── Dockerfile              # Pinned base, lockfile, cache cleanup
 ├── package.json            # Pinned @phala/dstack-sdk

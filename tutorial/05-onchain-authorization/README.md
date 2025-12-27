@@ -1,10 +1,10 @@
-# Tutorial 04: On-Chain Oracle with AppAuth
+# Tutorial 05: On-Chain Authorization
 
 Controlled multi-node deployment and custom authorization contracts.
 
 ## Prerequisites
 
-Complete [02-kms-and-signing](../02-kms-and-signing) first. That tutorial covers:
+Complete [03-keys-and-replication](../03-keys-and-replication) first. That tutorial covers:
 - Signature chain verification
 - Basic multi-node with `allowAnyDevice=true`
 
@@ -74,7 +74,7 @@ python3 deploy_replica.py
 
 ### Option 3: allowAnyDevice
 
-See [02-kms-and-signing](../02-kms-and-signing#multi-node-deployment) for the simpler `allowAnyDevice=true` approach.
+See [03-keys-and-replication](../03-keys-and-replication#multi-node-deployment) for the simpler `allowAnyDevice=true` approach.
 
 ### Option 4: Custom AppAuth Contract
 
@@ -92,7 +92,7 @@ Then register it:
 DstackKms(KMS_ADDRESS).registerApp(yourContract);
 ```
 
-**Examples:** NFT-gated, DAO-controlled, time-locked, multi-sig. See [08-extending-appauth](../08-extending-appauth).
+**Examples:** NFT-gated, DAO-controlled, time-locked, multi-sig. See [09-extending-appauth](../09-extending-appauth).
 
 ## DstackApp Owner Functions
 
@@ -107,7 +107,7 @@ function disableUpgrades() external onlyOwner;  // Permanent!
 
 ## On-Chain Verification Contract
 
-`TeeOracle.sol` verifies the signature chain from [02-kms-and-signing](../02-kms-and-signing) on-chain:
+`TeeOracle.sol` verifies the signature chain from [03-keys-and-replication](../03-keys-and-replication) on-chain:
 
 ```solidity
 function verify(
@@ -166,7 +166,7 @@ SUCCESS: On-chain verification passed
 ## Files
 
 ```
-04-onchain-oracle/
+05-onchain-authorization/
 ├── TeeOracle.sol              # On-chain signature verification
 ├── foundry.toml               # Foundry config (via-ir for stack depth)
 ├── test_anvil.py              # Test with local anvil
@@ -174,7 +174,7 @@ SUCCESS: On-chain verification passed
 ├── deploy_replica.py          # Deploy replica using existing appId
 ├── add_device.py              # Add device to whitelist (Option 2)
 ├── add_compose_hash.py        # Add compose hash to whitelist
-├── docker-compose.yaml        # Oracle app (same as 02)
+├── docker-compose.yaml        # Oracle app (same as 03)
 ├── requirements.txt
 └── README.md
 ```
@@ -209,8 +209,8 @@ function isAppAllowed(AppBootInfo calldata bootInfo)
 
 ## Next Steps
 
-- [05-hardening-https](../05-hardening-https): Strengthen TLS verification
-- [08-extending-appauth](../08-extending-appauth): Custom authorization contracts
+- [06-hardening-https](../06-hardening-https): Strengthen TLS verification
+- [09-extending-appauth](../09-extending-appauth): Custom authorization contracts
 
 ## References
 

@@ -1,4 +1,4 @@
-# Tutorial 05: Hardening HTTPS
+# Tutorial 06: Hardening HTTPS
 
 Strengthen TLS verification beyond browser defaults for DevProof applications.
 
@@ -18,10 +18,10 @@ The [phala-cloud-oracle-template](https://github.com/Gldywn/phala-cloud-oracle-t
 
 | This tutorial | Oracle template adds |
 |---------------|---------------------|
-| [01-attestation](../01-attestation) | ✓ Same TDX quote binding |
-| [02-kms-and-signing](../02-kms-and-signing) | ✓ Same signature chain |
-| [03-gateway-and-tls](../03-gateway-and-tls) | ✓ Same TLS basics |
-| [04-onchain-oracle](../04-onchain-oracle) | ✓ Same on-chain verification |
+| [01-attestation-and-reference-values](../01-attestation-and-reference-values) | ✓ Same TDX quote binding |
+| [03-keys-and-replication](../03-keys-and-replication) | ✓ Same signature chain |
+| [04-gateways-and-tls](../04-gateways-and-tls) | ✓ Same TLS basics |
+| [05-onchain-authorization](../05-onchain-authorization) | ✓ Same on-chain verification |
 | **HTTPS hardening** | OCSP, CRL, CT verification |
 
 For background on the hardening techniques:
@@ -37,5 +37,5 @@ For background on the hardening techniques:
 
 ## Next Steps
 
-- [06-encryption-freshness](../06-encryption-freshness): Advanced — encrypted storage with rollback protection
-- [07-lightclient](../07-lightclient): Advanced — verified blockchain state
+- [07-encryption-freshness](../07-encryption-freshness): Advanced — encrypted storage with rollback protection
+- [08-lightclient](../08-lightclient): Advanced — verified blockchain state

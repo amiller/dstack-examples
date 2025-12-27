@@ -1,4 +1,4 @@
-# Tutorial 06: Encryption, Integrity, and Freshness
+# Tutorial 07: Encryption, Integrity, and Freshness
 
 > **Status**: This is an advanced tutorial, work in progress.
 
@@ -96,8 +96,8 @@ Mitigations:
 
 ## Next Steps
 
-- [07-lightclient](../07-lightclient): Use light client for freshness anchoring
-- [08-extending-appauth](../08-extending-appauth): Custom authorization policies
+- [08-lightclient](../08-lightclient): Use light client for freshness anchoring
+- [09-extending-appauth](../09-extending-appauth): Custom authorization policies
 
 ## References
 

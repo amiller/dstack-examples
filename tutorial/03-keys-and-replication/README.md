@@ -1,4 +1,4 @@
-# Tutorial 02: KMS and Signing
+# Tutorial 03: Keys and Replication
 
 Derive persistent keys that survive restarts and produce verifiable signatures.
 
@@ -116,7 +116,7 @@ If all three pass, the signature chain is valid: the message was signed by a key
 
 ## On-Chain Verification
 
-The same verification can run in a smart contract. See [04-onchain-oracle](../04-onchain-oracle) for `TeeOracle.sol` which implements:
+The same verification can run in a smart contract. See [05-onchain-authorization](../05-onchain-authorization) for `TeeOracle.sol` which implements:
 
 ```solidity
 function verify(
@@ -200,12 +200,12 @@ Node 2: Oracle signer: 0x7a3B...  (same!)
     Same derived key            Same derived key
 ```
 
-For more controlled multi-node setups (owner-approved devices, custom AppAuth), see [04-onchain-oracle](../04-onchain-oracle).
+For more controlled multi-node setups (owner-approved devices, custom AppAuth), see [05-onchain-authorization](../05-onchain-authorization).
 
 ## Files
 
 ```
-02-kms-and-signing/
+03-keys-and-replication/
 ├── docker-compose.yaml       # Oracle with signing
 ├── test_local.py             # Signature chain verification
 ├── deploy_with_contract.py   # Deploy with allowAnyDevice=true
@@ -216,8 +216,8 @@ For more controlled multi-node setups (owner-approved devices, custom AppAuth), 
 
 ## Next Steps
 
-- [03-gateway-and-tls](../03-gateway-and-tls): Custom domains and TLS
-- [04-onchain-oracle](../04-onchain-oracle): On-chain verification contract, AppAuth deployment
+- [04-gateways-and-tls](../04-gateways-and-tls): Custom domains and TLS
+- [05-onchain-authorization](../05-onchain-authorization): On-chain verification contract, AppAuth deployment
 
 ## Open Questions
 
@@ -230,7 +230,7 @@ For more controlled multi-node setups (owner-approved devices, custom AppAuth), 
 > - Can we specify a fixed salt to get the same compose_hash across replicas?
 > - Should AppAuth support wildcards or patterns for compose validation?
 >
-> See: [04-onchain-oracle](../04-onchain-oracle) for AppAuth contract details.
+> See: [05-onchain-authorization](../05-onchain-authorization) for AppAuth contract details.
 
 ## References
 

@@ -1,4 +1,4 @@
-# Tutorial 01: Attestation
+# Tutorial 01: Attestation and Reference Values
 
 Build a TEE oracle and verify its attestation end-to-end.
 
@@ -358,15 +358,15 @@ TEE apps need the same pattern. The attestation is like the on-chain codehash. B
 
 ---
 
-**Next:** [01a-reproducible-builds](../01a-reproducible-builds) shows how developers can provide the evidence auditors need—and protect against bitrot that breaks verification over time.
+**Next:** [02-bitrot-and-reproducibility](../02-bitrot-and-reproducibility) shows how developers can provide the evidence auditors need—and protect against bitrot that breaks verification over time.
 
 ---
 
 ## Next Steps
 
-- [01a-reproducible-builds](../01a-reproducible-builds): Make builds verifiable for auditors
-- [02-kms-and-signing](../02-kms-and-signing): Derive persistent keys and sign messages
-- [03-gateway-and-tls](../03-gateway-and-tls): Custom domains and TLS
+- [02-bitrot-and-reproducibility](../02-bitrot-and-reproducibility): Make builds verifiable for auditors
+- [03-keys-and-replication](../03-keys-and-replication): Derive persistent keys and sign messages
+- [04-gateways-and-tls](../04-gateways-and-tls): Custom domains and TLS
 
 ## SDK Reference
 
@@ -376,7 +376,7 @@ TEE apps need the same pattern. The attestation is like the on-chain codehash. B
 ## Files
 
 ```
-01-attestation/
+01-attestation-and-reference-values/
 ├── docker-compose.yaml  # Oracle app (quick-start, non-reproducible)
 ├── verify_full.py       # Attestation verification script
 └── README.md
