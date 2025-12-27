@@ -64,8 +64,12 @@ EXISTING_APP_AUTH_ADDRESS = "0x" + EXISTING_APP_ID  # For on-chain KMS, appId IS
 # Target node for replica
 TARGET_NODE_ID = 18  # prod9
 
-# Replica name - change this for each replica
-REPLICA_NAME = "tee-oracle-option2-replica"
+# IMPORTANT: compose_file.name must be FIXED across all replicas for same compose_hash
+# This is separate from the CVM name (which can be unique per replica)
+COMPOSE_FILE_NAME = "tee-oracle-shared"  # Keep this the same for all replicas!
+
+# CVM name - unique per replica (for cloud platform identification)
+REPLICA_NAME = "tee-oracle-replica-002"  # Change this for each new replica
 
 def get_headers():
     return {
@@ -77,10 +81,18 @@ def read_compose_file():
     with open("docker-compose.yaml", "r") as f:
         return f.read()
 
-def provision_cvm(name: str, compose_content: str, node_id: int, kms_id: str):
-    """Step 1: Provision CVM resources"""
+def provision_cvm(cvm_name: str, compose_name: str, compose_content: str, node_id: int, kms_id: str):
+    """Step 1: Provision CVM resources
+
+    Args:
+        cvm_name: Unique name for this CVM instance (for cloud platform)
+        compose_name: Fixed name for compose_file (determines compose_hash - same for all replicas!)
+        compose_content: Docker compose YAML content
+        node_id: Target node ID
+        kms_id: KMS identifier
+    """
     payload = {
-        "name": name,
+        "name": cvm_name,  # Unique per replica
         "image": "dstack-0.5.4",
         "vcpu": 1,
         "memory": 2048,
@@ -93,7 +105,7 @@ def provision_cvm(name: str, compose_content: str, node_id: int, kms_id: str):
             "features": ["kms"],
             "kms_enabled": True,
             "manifest_version": 2,
-            "name": name,
+            "name": compose_name,  # FIXED for all replicas - determines compose_hash!
             "public_logs": True,
             "public_sysinfo": True,
             "tproxy_enabled": False
@@ -131,13 +143,16 @@ def main():
     print("=" * 60)
     print(f"Existing App ID: {EXISTING_APP_ID}")
     print(f"Target Node: prod9 (id={TARGET_NODE_ID})")
+    print(f"CVM Name: {REPLICA_NAME} (unique per replica)")
+    print(f"Compose Name: {COMPOSE_FILE_NAME} (fixed - determines compose_hash)")
     print()
 
     # Step 1: Provision
     print("Step 1: Provisioning CVM resources...")
     compose_content = read_compose_file()
     provision_result = provision_cvm(
-        name=REPLICA_NAME,
+        cvm_name=REPLICA_NAME,
+        compose_name=COMPOSE_FILE_NAME,  # Fixed for all replicas!
         compose_content=compose_content,
         node_id=TARGET_NODE_ID,
         kms_id="kms-base-prod9"

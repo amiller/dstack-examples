@@ -158,6 +158,45 @@ if (keccak256(bytes(bootInfo.tcbStatus)) != keccak256("UpToDate"))
     return (false, "TCB not up to date");
 ```
 
+## Owner-Controlled Whitelisting
+
+For production deployments where you want explicit control over which devices and code versions can run, use the base `DstackApp` owner functions.
+
+### Adding Devices
+
+```bash
+# Using cast
+cast send $APP_AUTH_ADDRESS "addDevice(bytes32)" $DEVICE_ID \
+  --private-key "$PRIVATE_KEY" --rpc-url https://mainnet.base.org
+
+# Or use the helper script
+python3 add_device.py
+```
+
+### Adding Compose Hashes (Upgrades)
+
+When you change your `docker-compose.yaml`, you get a new compose hash that must be whitelisted:
+
+```bash
+# Using cast
+cast send $APP_AUTH_ADDRESS "addComposeHash(bytes32)" $NEW_COMPOSE_HASH \
+  --private-key "$PRIVATE_KEY" --rpc-url https://mainnet.base.org
+
+# Or use the helper script
+python3 add_compose_hash.py
+```
+
+**Note:** The `compose_file.name` field (not CVM name) determines the compose hash. Keep this consistent across deployments. See [05-onchain-authorization](../05-onchain-authorization) for details.
+
+### Files
+
+```
+09-extending-appauth/
+├── add_device.py              # Add device to whitelist
+├── add_compose_hash.py        # Add compose hash (for upgrades)
+└── README.md
+```
+
 ## Deployment
 
 1. Deploy your custom contract to a supported chain (Base, Ethereum, etc.)

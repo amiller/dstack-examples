@@ -57,6 +57,10 @@ CLOUD_API = "https://cloud-api.phala.network/api/v1"
 API_KEY = os.environ.get("PHALA_CLOUD_API_KEY") or decrypt_api_key()
 PRIVATE_KEY = os.environ.get("PRIVATE_KEY")
 
+# IMPORTANT: This compose_file.name must be FIXED and shared with all replicas
+# It determines the compose_hash - keep this the same in deploy_replica.py!
+COMPOSE_FILE_NAME = "tee-oracle-shared"
+
 # Base mainnet
 BASE_RPC = "https://mainnet.base.org"
 KMS_CONTRACT = "0x2f83172A49584C017F2B256F0FB2Dca14126Ba9C"
@@ -90,9 +94,15 @@ def read_compose_file():
     with open("docker-compose.yaml", "r") as f:
         return f.read()
 
-def provision_cvm(name: str, compose_content: str, node_id: int, kms_id: str):
+def provision_cvm(cvm_name: str, compose_name: str, compose_content: str, node_id: int, kms_id: str):
+    """Provision CVM resources.
+
+    Args:
+        cvm_name: Unique name for this CVM instance (for cloud platform)
+        compose_name: Fixed name for compose_file (determines compose_hash - same for all replicas!)
+    """
     payload = {
-        "name": name,
+        "name": cvm_name,  # Unique per instance
         "image": "dstack-0.5.4",
         "vcpu": 1,
         "memory": 2048,
@@ -105,7 +115,7 @@ def provision_cvm(name: str, compose_content: str, node_id: int, kms_id: str):
             "features": ["kms"],
             "kms_enabled": True,
             "manifest_version": 2,
-            "name": name,
+            "name": compose_name,  # FIXED for all replicas - determines compose_hash!
             "public_logs": True,
             "public_sysinfo": True,
             "tproxy_enabled": False
@@ -179,11 +189,19 @@ def main():
     print("=" * 60)
     print("Deploying CVM with allowAnyDevice=true")
     print("=" * 60)
+    print(f"Compose File Name: {COMPOSE_FILE_NAME} (determines compose_hash)")
+    print("  -> All replicas must use this same compose_file.name!")
 
     # Step 1: Provision
     print("\nStep 1: Provisioning CVM resources on prod5...")
     compose_content = read_compose_file()
-    provision = provision_cvm("tee-oracle-any", compose_content, 26, "kms-base-prod5")
+    provision = provision_cvm(
+        cvm_name="tee-oracle-primary",     # Unique CVM name for this instance
+        compose_name=COMPOSE_FILE_NAME,     # FIXED - shared with all replicas
+        compose_content=compose_content,
+        node_id=26,
+        kms_id="kms-base-prod5"
+    )
     compose_hash = provision["compose_hash"]
     print(f"  Compose Hash: {compose_hash}")
 
@@ -203,6 +221,11 @@ def main():
     print("SUCCESS! Save this for deploying replicas:")
     print(f"  APP_ID={app_id}")
     print(f"  COMPOSE_HASH={compose_hash}")
+    print(f"  COMPOSE_FILE_NAME={COMPOSE_FILE_NAME}")
+    print()
+    print("In deploy_replica.py, set:")
+    print(f'  EXISTING_APP_ID = "{app_id.lower().replace("0x", "")}"')
+    print(f'  COMPOSE_FILE_NAME = "{COMPOSE_FILE_NAME}"')
     print("=" * 60)
 
 if __name__ == "__main__":

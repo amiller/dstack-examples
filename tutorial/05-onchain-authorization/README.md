@@ -40,7 +40,33 @@ Every dstack app has an **AppAuth contract** on Base. When a TEE requests keys, 
 
 ## Deployment Options
 
-### Option 1: Single Device (CLI Default)
+### Option 1: allowAnyDevice (Recommended for Multi-Node)
+
+Deploy with `allowAnyDevice=true` so any TEE can join without per-device whitelisting:
+
+```bash
+python3 deploy_with_contract.py
+```
+
+This creates AppAuth with:
+- `owner` = address derived from PRIVATE_KEY
+- `allowAnyDevice = true` ← any TEE device can join
+- `allowedComposeHashes[hash] = true` ← only this code version
+
+**The compose_file.name trick:** All replicas must use the same `compose_file.name` (not CVM name) to get the same compose_hash. See `COMPOSE_FILE_NAME` in `deploy_with_contract.py` and `deploy_replica.py`.
+
+```python
+# deploy_with_contract.py and deploy_replica.py both use:
+COMPOSE_FILE_NAME = "tee-oracle-shared"  # Determines compose_hash!
+```
+
+Deploy replicas:
+```bash
+# Edit REPLICA_NAME in deploy_replica.py, then:
+python3 deploy_replica.py
+```
+
+### Option 2: Single Device (CLI Default)
 
 ```bash
 phala deploy -n my-oracle -c docker-compose.yaml \
@@ -49,32 +75,12 @@ phala deploy -n my-oracle -c docker-compose.yaml \
 ```
 
 Creates AppAuth with:
-- `owner` = address derived from PRIVATE_KEY
 - `allowAnyDevice = false`
-- `allowedDeviceIds[thisDevice] = true`
-- `allowedComposeHashes[thisHash] = true`
+- Only this specific device whitelisted
 
-### Option 2: Owner Adds Devices (Controlled Multi-Node)
+### Option 3: Owner-Controlled Whitelisting
 
-Deploy first node, then the owner whitelists additional devices:
-
-```bash
-# Step 1: Deploy first node
-phala deploy -n my-oracle -c docker-compose.yaml \
-  --kms-id kms-base-prod5 \
-  --private-key "$PRIVATE_KEY"
-
-# Step 2: Add second device
-cast send $APP_AUTH_ADDRESS "addDevice(bytes32)" $DEVICE_ID_2 \
-  --private-key "$PRIVATE_KEY" --rpc-url https://mainnet.base.org
-
-# Step 3: Deploy second node
-python3 deploy_replica.py
-```
-
-### Option 3: allowAnyDevice
-
-See [03-keys-and-replication](../03-keys-and-replication#multi-node-deployment) for the simpler `allowAnyDevice=true` approach.
+For production deployments where the owner explicitly approves each device and code version, see [09-extending-appauth](../09-extending-appauth).
 
 ### Option 4: Custom AppAuth Contract
 
@@ -197,11 +203,10 @@ SUCCESS: On-chain verification passed
 05-onchain-authorization/
 ├── TeeOracle.sol              # On-chain signature verification
 ├── foundry.toml               # Foundry config (via-ir for stack depth)
+├── deploy_with_contract.py    # Deploy with allowAnyDevice=true
+├── deploy_replica.py          # Deploy replica using existing appId
 ├── test_anvil.py              # Test with local anvil
 ├── test_phalacloud.py         # Test on Phala Cloud
-├── deploy_replica.py          # Deploy replica using existing appId
-├── add_device.py              # Add device to whitelist (Option 2)
-├── add_compose_hash.py        # Add compose hash to whitelist
 ├── docker-compose.yaml        # Oracle app (same as 03)
 ├── requirements.txt
 └── README.md
