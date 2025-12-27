@@ -96,9 +96,9 @@ See [Dstack TEE documentation](https://docs.phala.com/dstack/local-development) 
 ### Core Tutorial
 
 1. **[01-attestation](./01-attestation)** — Build a TEE oracle and verify its attestation end-to-end
-2. **[02-kms-and-signing](./02-kms-and-signing)** — Derive persistent keys that survive restarts
+2. **[02-kms-and-signing](./02-kms-and-signing)** — Derive persistent keys and verify signature chains
 3. **[03-gateway-and-tls](./03-gateway-and-tls)** — Custom domains and TLS certificate verification
-4. **[04-onchain-oracle](./04-onchain-oracle)** — Full oracle with on-chain verification, multi-node deployment
+4. **[04-onchain-oracle](./04-onchain-oracle)** — AppAuth contracts and multi-node deployment
 5. **[05-hardening-https](./05-hardening-https)** — OCSP stapling, CRL checking, CT records
 
 ### Advanced

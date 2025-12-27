@@ -1,6 +1,6 @@
 # Tutorial 02: KMS and Signing
 
-Derive persistent keys that survive restarts and produce on-chain verifiable signatures.
+Derive persistent keys that survive restarts and produce verifiable signatures.
 
 ## The Problem
 
@@ -16,7 +16,6 @@ import { DstackClient } from '@phala/dstack-sdk'
 const client = new DstackClient()
 const result = await client.getKey('/oracle', 'ethereum')
 
-// Derive an Ethereum wallet
 const privateKey = '0x' + Buffer.from(result.key).toString('hex').slice(0, 64)
 ```
 
@@ -25,37 +24,12 @@ The derived key is:
 - **Unique to your app**: Different apps (compose hashes) get different keys
 - **Verifiable**: Signature chain proves the key came from KMS
 
-## How It Works
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                          KMS                                │
-│  (runs in its own TEE, holds root keys)                    │
-│                                                             │
-│  Root Key ──derives──▶ App Key ──derives──▶ Your Key       │
-│     │                     │                    │            │
-│     │                     │                    └─ getKey('/oracle')
-│     │                     └─ tied to appId (compose hash)
-│     └─ KMS root, known on-chain
-└─────────────────────────────────────────────────────────────┘
-```
+## Signature Chain
 
 The KMS returns a **signature chain** proving derivation:
 
-```javascript
-const result = await client.getKey('/oracle', 'ethereum')
-
-result.key                    // Your derived key bytes
-result.signature_chain[0]     // App signature: appKey signs derivedPubkey
-result.signature_chain[1]     // KMS signature: kmsRoot signs appPubkey
 ```
-
-## On-Chain Verification
-
-The signature chain lets smart contracts verify a signature came from a TEE:
-
-```
-KMS Root (known on-chain: 0x2f83172A...)
+KMS Root (known on-chain)
     │
     │ signs: "dstack-kms-issued:" + appId + appPubkey
     ▼
@@ -66,28 +40,94 @@ App Key (recovered from kmsSignature)
 Derived Key → signs your messages
 ```
 
-A contract can:
-1. Recover `appPubkey` from `kmsSignature` and verify it matches KMS root
-2. Recover `derivedPubkey` from `appSignature`
-3. Verify the message signature against `derivedPubkey`
-
-## Minimal Example
-
 ```javascript
-import { DstackClient } from '@phala/dstack-sdk'
-import { privateKeyToAccount } from 'viem/accounts'
+const result = await client.getKey('/oracle', 'ethereum')
 
-const client = new DstackClient()
+result.key                    // Your derived key bytes
+result.signature_chain[0]     // App signature: appKey signs derivedPubkey
+result.signature_chain[1]     // KMS signature: kmsRoot signs appPubkey
+```
 
-// Derive a persistent wallet
-const result = await client.getKey('/wallet', 'ethereum')
-const privateKey = '0x' + Buffer.from(result.key).toString('hex').slice(0, 64)
-const account = privateKeyToAccount(privateKey)
+## Try It
 
-console.log('Address:', account.address)  // Same every restart
+```bash
+pip install -r requirements.txt
+phala simulator start
 
-// Sign a message
-const signature = await account.signMessage({ message: 'hello' })
+docker compose build
+docker compose run --rm -p 8080:8080 \
+  -v ~/.phala-cloud/simulator/0.5.3/dstack.sock:/var/run/dstack.sock \
+  app
+```
+
+In another terminal:
+
+```bash
+python3 test_local.py
+```
+
+Output:
+```
+TEE Oracle Signature Chain Verification
+============================================================
+Oracle URL: http://localhost:8080
+KMS Root: 0x8f2cF602C9695b23130367ed78d8F557554de7C5
+
+Fetching from oracle...
+Got price: $97234.0
+Source: api.coingecko.com
+
+Verifying Signature Chain
+==================================================
+App ID: 0x...
+Derived Pubkey: 02a1b2c3d4e5f6...
+
+Step 1: App signature over derived key
+  App Address: 0x...
+
+Step 2: KMS signature over app key
+  Recovered KMS: 0x8f2cF602C9695b23130367ed78d8F557554de7C5
+  Expected KMS:  0x8f2cF602C9695b23130367ed78d8F557554de7C5
+  OK: KMS signature verified
+
+Step 3: Message signature
+  Recovered signer: 0x...
+  Expected signer:  0x...
+  OK: Message signature verified
+
+============================================================
+All verifications passed:
+  - KMS signed the app key
+  - App key signed the derived key
+  - Derived key signed the oracle message
+```
+
+## Verifying the Signature Chain
+
+The verification steps:
+
+1. **App signature** — Recover the app public key from `appSignature` over the message `"{purpose}:{derivedPubkeyHex}"`
+
+2. **KMS signature** — Recover the KMS signer from `kmsSignature` over the message `"dstack-kms-issued:" + appId + appPubkeyCompressed`. Compare against known KMS root.
+
+3. **Message signature** — Recover the signer from the message signature. Compare against address derived from `derivedPubkey`.
+
+If all three pass, the signature chain is valid: the message was signed by a key derived from KMS for this specific app.
+
+## On-Chain Verification
+
+The same verification can run in a smart contract. See [04-onchain-oracle](../04-onchain-oracle) for `TeeOracle.sol` which implements:
+
+```solidity
+function verify(
+    bytes32 messageHash,
+    bytes calldata messageSignature,
+    bytes calldata appSignature,
+    bytes calldata kmsSignature,
+    bytes calldata derivedCompressedPubkey,
+    bytes calldata appCompressedPubkey,
+    string calldata purpose
+) public view returns (bool isValid)
 ```
 
 ## Key Paths
@@ -100,20 +140,84 @@ await client.getKey('/wallet/fees')      // Fee payer
 await client.getKey('/signing/oracle')   // Oracle signatures
 ```
 
-## Try It
+## Multi-Node Deployment
+
+Multiple TEE nodes can derive the **same key** if they share the same `appId`. This enables redundancy and load balancing while maintaining a single signing identity.
+
+### Deploy with allowAnyDevice
+
+The simplest multi-node setup uses `allowAnyDevice=true`, which lets any TEE with the correct compose hash join:
 
 ```bash
-phala simulator start
+# Deploy first node (deploys AppAuth contract with allowAnyDevice=true)
+export PRIVATE_KEY="0x..."
+python3 deploy_with_contract.py
+```
 
-docker compose run --rm \
-  -v ~/.phala-cloud/simulator/0.5.3/dstack.sock:/var/run/dstack.sock \
-  app
+Output:
+```
+SUCCESS! Save this for deploying replicas:
+  APP_ID=0xc96d55b03ede924c89154348be9dcffd52304af0
+  COMPOSE_HASH=0x392b8a1f...
+```
+
+### Deploy Replicas
+
+Edit `deploy_replica.py` with the APP_ID from above, then:
+
+```bash
+python3 deploy_replica.py
+```
+
+Both nodes now derive the same key:
+```
+Node 1: Oracle signer: 0x7a3B...  (same!)
+Node 2: Oracle signer: 0x7a3B...  (same!)
+```
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              AppAuth Contract (allowAnyDevice=true)          │
+│                                                             │
+│  allowedComposeHashes[0x392b...] = true                     │
+│  allowAnyDevice = true                                      │
+│                                                             │
+│  isAppAllowed(bootInfo):                                    │
+│    if composeHash in allowedComposeHashes → ALLOW           │
+│    (device ID doesn't matter)                               │
+└─────────────────────────────────────────────────────────────┘
+          │                           │
+          ▼                           ▼
+    ┌──────────┐               ┌──────────┐
+    │  Node 1  │               │  Node 2  │
+    │  prod5   │               │  prod9   │
+    └──────────┘               └──────────┘
+          │                           │
+          │  getKey("/oracle")        │  getKey("/oracle")
+          ▼                           ▼
+    Same derived key            Same derived key
+```
+
+For more controlled multi-node setups (owner-approved devices, custom AppAuth), see [04-onchain-oracle](../04-onchain-oracle).
+
+## Files
+
+```
+02-kms-and-signing/
+├── docker-compose.yaml       # Oracle with signing
+├── test_local.py             # Signature chain verification
+├── deploy_with_contract.py   # Deploy with allowAnyDevice=true
+├── deploy_replica.py         # Deploy replica using existing appId
+├── requirements.txt          # Python dependencies
+└── README.md
 ```
 
 ## Next Steps
 
-- [01-attestation](../01-attestation): Understand TDX quotes and verification
-- [04-onchain-oracle](../04-onchain-oracle): Full oracle with signature chain verification contract
+- [03-gateway-and-tls](../03-gateway-and-tls): Custom domains and TLS
+- [04-onchain-oracle](../04-onchain-oracle): On-chain verification contract, AppAuth deployment
 
 ## References
 
