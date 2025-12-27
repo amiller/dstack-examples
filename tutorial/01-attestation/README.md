@@ -70,19 +70,20 @@ The quote contains **measured values**. Verification means comparing them agains
 
 ### Reference Values: Where They Come From
 
-| Measured Value | Reference Value | Who Provides It |
-|----------------|-----------------|-----------------|
+| Measured Value | Reference Value | How It's Verified |
+|----------------|-----------------|-------------------|
 | Intel signature | Intel root CA | Intel (built into dcap-qvl) |
-| MRTD, RTMR0-2 | Hash of OS image | [meta-dstack releases](https://github.com/Dstack-TEE/meta-dstack/releases) |
-| compose-hash (RTMR3) | `sha256(app-compose.json)` | **The developer** |
+| MRTD, RTMR0-2 | Hash of OS image | [Reproducibly build meta-dstack](https://github.com/Dstack-TEE/meta-dstack) |
+| compose-hash (RTMR3) | `sha256(app-compose.json)` | [Build locally with vmm-cli](#building-app-composejson-locally) |
 | report_data | `sha256(statement)` | Computed from output |
 | tlsFingerprint | Certificate fingerprint | Fetch from api.coingecko.com |
 
 This is the core insight: **attestation is only as trustworthy as your reference values.**
 
-- Intel provides reference values for hardware authenticity
-- Dstack maintainers provide reference values for the OS layer
-- **The app developer must provide reference values for the application layer**
+Dstack is designed around **reproducible builds** at every layer:
+- **Hardware** — Intel provides attestation infrastructure
+- **OS layer** — meta-dstack is open source and reproducibly built (see [reproducibility docs](https://github.com/Dstack-TEE/meta-dstack/blob/main/docs/reproducibility.md) — TODO: placeholder)
+- **App layer** — You can build `app-compose.json` locally and compute the exact hash
 
 ### Step 1: Validate Quote and Compare Measurements
 
@@ -121,53 +122,71 @@ Output:
 
 ---
 
-> **About compose-hash**
->
-> Your `docker-compose.yaml` gets wrapped into an `app-compose.json` manifest:
-> ```json
-> {
->   "docker_compose_file": "<your compose content>",
->   "pre_launch_script": "#!/bin/bash\n...",
->   "kms_enabled": true,
->   "salt": "random-hex-string",
->   ...
-> }
-> ```
-> The SHA-256 of this manifest is the **compose-hash** in RTMR3.
->
-> **Important:** The `pre_launch_script` is included in the hash. Phala Cloud injects its own prelaunch script. To audit, fetch the complete `app-compose.json` via `phala cvms attestation <app>`. See [prelaunch-script](../../prelaunch-script) for the Phala Cloud script source.
->
-> For standalone verification that builds app-compose.json locally: [attestation/configid-based](../../attestation/configid-based)
+### Building app-compose.json Locally
 
-### The app-compose.json Manifest
+The compose-hash in RTMR3 is the SHA-256 of an `app-compose.json` manifest. This is **not opaque** — the structure is simple and you can build it yourself:
 
-The compose-hash in RTMR3 is the SHA-256 of an `app-compose.json` manifest:
+```python
+import json
 
-```json
-{
-  "manifest_version": 2,
-  "name": "tee-oracle",
-  "runner": "docker-compose",
-  "docker_compose_file": "services:\n  app:\n    image: ...",
-  "kms_enabled": true,
-  "gateway_enabled": true,
-  "public_logs": true,
-  "public_sysinfo": true,
-  "pre_launch_script": "#!/bin/bash\n...",
-  "allowed_envs": [],
-  "tproxy_enabled": true
+app_compose = {
+    "manifest_version": 2,
+    "name": "tee-oracle",
+    "runner": "docker-compose",
+    "docker_compose_file": open("docker-compose.yaml").read(),
+    "kms_enabled": True,
+    "gateway_enabled": True,
+    "public_logs": False,
+    "public_sysinfo": False,
+    "allowed_envs": [],
+    "no_instance_id": False,
+    "secure_time": True,
+    # "pre_launch_script": "...",  # Optional: script that runs before containers start
 }
+
+with open("app-compose.json", "w") as f:
+    json.dump(app_compose, f, indent=2)
 ```
 
-**Where this comes from:**
-- `docker_compose_file`: Your docker-compose.yaml content
-- `pre_launch_script`: Default provided by Phala Cloud, can be customized
-- Other fields: Deployment configuration options
+**Fields that affect the hash:**
+| Field | What it controls |
+|-------|-----------------|
+| `docker_compose_file` | Your docker-compose.yaml content (embedded as string) |
+| `kms_enabled` | Whether the app gets KMS-derived keys |
+| `gateway_enabled` | Whether the app gets a TLS endpoint via dstack-gateway |
+| `pre_launch_script` | Script that runs before containers start |
+| `allowed_envs` | Environment variable names that can be injected |
+| Other fields | Various dstack features (logs, sysinfo, secure_time, etc.) |
 
-**How to fetch it:**
-- Deployed app: `phala cvms attestation <app> --json | jq .app_info.tcb_info.app_compose`
-- Running on dstack: `curl localhost:8090/info`
-- Simulator: Uses fixed manifest at `sdk/simulator/app-compose.json`
+**Computing the hash:**
+
+The SDK provides deterministic hashing (sorted keys, compact JSON — matches what dstack uses internally):
+
+```bash
+pip install dstack-sdk
+python -c "
+from dstack_sdk import get_compose_hash
+import json
+compose = json.load(open('app-compose.json'))
+print(get_compose_hash(compose))
+"
+```
+
+**Reference tooling:** The dstack VMM includes a CLI for building app-compose.json: [vmm-cli.py](https://github.com/Dstack-TEE/dstack/blob/main/vmm/src/vmm-cli.py) (see the `compose` subcommand). It's standalone Python 3 — the crypto dependencies are only needed for encrypting environment variables, not for building the compose file.
+
+**What about Phala Cloud?**
+
+Phala Cloud is a convenience layer — it wraps your docker-compose into an app-compose.json for you. But it may inject additional fields like `pre_launch_script`. To verify what's actually deployed:
+
+```bash
+# Fetch the complete app-compose.json from a deployed app
+phala cvms attestation <app> --json | jq .app_info.tcb_info.app_compose
+
+# Or from a running dstack instance
+curl localhost:8090/info
+```
+
+See [prelaunch-script](../../prelaunch-script) for the Phala Cloud script source, and [attestation/configid-based](../../attestation/configid-based) for standalone verification.
 
 ### Two Verification Approaches
 
@@ -266,16 +285,16 @@ TEE attestation helps, but only partially. The quote proves *some code* is runni
 
 ### Trust Layers
 
-Every TEE app has a trust stack. At each layer, ask: *"Where does the reference value come from?"*
+Every TEE app has a trust stack. At each layer, ask: *"Can I compute the reference value myself?"*
 
-| Layer | What You're Trusting | Reference Value Source |
-|-------|---------------------|------------------------|
+| Layer | What You're Trusting | How to Verify |
+|-------|---------------------|---------------|
 | Hardware | Intel TDX is secure | Intel's attestation infrastructure |
-| Firmware | No backdoors in BIOS/firmware | Platform vendor |
-| OS | Dstack boots what it claims | meta-dstack releases (open source, reproducible) |
-| App | Code matches what was audited | **Developer-provided** |
+| Firmware | No backdoors in BIOS/firmware | Platform vendor (out of scope for dstack) |
+| OS | Dstack boots what it claims | [Reproducibly build meta-dstack](https://github.com/Dstack-TEE/meta-dstack) |
+| App | Code matches what was audited | [Build app-compose.json locally](#building-app-composejson-locally) |
 
-The bottom three layers have established reference value sources. The app layer is the developer's responsibility.
+Dstack's design goal: every layer should be reproducibly verifiable from source.
 
 ### How Auditing Actually Works
 
