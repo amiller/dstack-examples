@@ -12,4 +12,12 @@ services:
     ports:
       - "8443:8443"
     volumes:
-      - /var/run/dstack.sock:/var/run/dstack.sock
+      - ${DSTACK_SOCK:-/var/run/dstack.sock}:/var/run/dstack.sock
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: tcp app:8443 --log stdout
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    depends_on:
+      - app
