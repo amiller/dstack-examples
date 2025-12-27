@@ -13,7 +13,7 @@ ENV npm_config_cache=/tmp/npm-cache
 WORKDIR /app
 
 # Copy lockfile first for layer caching
-COPY package.json package-lock.json ./
+COPY --chmod=644 package.json package-lock.json ./
 
 # Install with ci (uses lockfile exactly) and clean all caches
 # NODE_COMPILE_CACHE creates non-deterministic bytecode - must be disabled or cleaned
@@ -21,7 +21,7 @@ RUN npm ci --omit=dev --ignore-scripts && \
     rm -rf /tmp/npm-cache /tmp/node-compile-cache && \
     find /app -exec touch -d "@${SOURCE_DATE_EPOCH}" {} + 2>/dev/null || true
 
-COPY app.mjs ./
+COPY --chmod=644 app.mjs ./
 RUN touch -d "@${SOURCE_DATE_EPOCH}" /app/app.mjs
 
 CMD ["node", "app.mjs"]

@@ -1,6 +1,6 @@
 {
-  "image_hash": "5864fb1fdf1ee22be3318e049bcdb8c472a3c96d4854f3608f07afffa73abdb3",
-  "image_digest": "sha256:afadb40549b91ca4f9031e8ecd79bd4095b68afadbf6578fbecc57d0f6dfeab2",
-  "build_date": "2025-12-27T17:31:37Z",
+  "image_hash": "37538f3d7607bdbc03c6c87834feab738998568c1f308541e9dbf8c1e01c594b",
+  "image_digest": "sha256:57e1059c430c176fb0a45700207c82f7fb7e842b10013fd0d6f80ce5cc411390",
+  "build_date": "2025-12-27T19:49:40Z",
   "source_date_epoch": 0
 }
