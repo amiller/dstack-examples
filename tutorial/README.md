@@ -116,7 +116,7 @@ phala deploy -n my-app -c docker-compose.yaml
 1. **[01-attestation](./01-attestation)** — Build a TEE oracle and verify its attestation end-to-end
    - **[01a-reproducible-builds](./01a-reproducible-builds)** — Make builds verifiable for auditors
 2. **[02-kms-and-signing](./02-kms-and-signing)** — Derive persistent keys and verify signature chains
-3. **[03-gateway-and-tls](./03-gateway-and-tls)** — Connecting to TEE nodes: gateway, stunnel, ngrok
+3. **[03-gateway-and-tls](./03-gateway-and-tls)** — Self-signed TLS with attestation-bound certificates
 4. **[04-onchain-oracle](./04-onchain-oracle)** — AppAuth contracts and multi-node deployment
 5. **[05-hardening-https](./05-hardening-https)** — OCSP stapling, CRL checking, CT records
 

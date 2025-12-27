@@ -1,201 +1,174 @@
-# Tutorial 03: Connecting to TEE Nodes
+# Tutorial 03: TLS and Connectivity
 
-Multiple ways to route traffic to your dstack applications.
+Self-signed TLS with attestation-bound certificates.
 
-## Overview
+## Prerequisites
 
-dstack apps run in isolated TEE environments without public IPs. This tutorial covers three approaches to connect:
+Complete [01-attestation](../01-attestation) first. This tutorial builds on attestation verification.
 
-| Approach | Use Case | Client Setup |
-|----------|----------|--------------|
-| Gateway Domain | HTTP/HTTPS apps | None (browser works) |
-| Stunnel | TCP protocols (games, SSH) | Install stunnel on client |
-| Ngrok | Bypass gateway, public IP | Run ngrok inside TEE |
+## The Problem
 
-## Approach 1: Gateway Domain (Default)
+TEE apps need TLS, but:
+- The dstack gateway terminates TLS → gateway sees plaintext
+- Let's Encrypt requires DNS control → adds complexity
+- Trusting a relay service (ngrok) to terminate TLS → breaks TEE integrity
 
-Every deployed app gets a URL like:
-```
-https://<app-id>-<port>.dstack-prod5.phala.network
-```
+## The Solution: Attestation-Bound Certificates
 
-The gateway terminates TLS and routes traffic to your container's port.
+The TEE generates a self-signed certificate. The certificate fingerprint is included in the attestation. Clients verify:
 
 ```
-┌──────────┐     HTTPS      ┌─────────────┐     TCP      ┌──────────┐
-│  Client  │ ────────────── │   Gateway   │ ──────────── │ TEE App  │
-│ (browser)│                │  (port 443) │              │ (port X) │
-└──────────┘                └─────────────┘              └──────────┘
+1. Connect to TEE (ignore cert validation initially)
+2. Fetch attestation from /attestation endpoint
+3. Validate attestation (quote, measurements, etc.)
+4. Extract cert fingerprint from attestation
+5. Verify the TLS cert matches the attested fingerprint
+6. Now the connection is trusted end-to-end
 ```
 
-**Pros:** Works out of the box, no client setup
-**Cons:** HTTP/WebSocket only, gateway sees plaintext
+This works regardless of how you reach the TEE - gateway, ngrok, direct IP, etc.
 
-### Example
-
-Deploy any HTTP app:
-
-```yaml
-services:
-  web:
-    image: nginx
-    ports:
-      - "80:80"
-```
-
-After deploy, access at `https://<app-id>-80.dstack-prod5.phala.network`
-
-## Approach 2: Stunnel (TCP over TLS)
-
-For protocols that aren't HTTP - games, SSH, databases, etc. The client runs stunnel to unwrap TLS locally.
+## Architecture
 
 ```
-┌──────────┐   TCP   ┌─────────┐   TLS    ┌─────────────┐  TCP  ┌──────────┐
-│ Game     │ ─────── │ stunnel │ ──────── │   Gateway   │ ───── │ TEE App  │
-│ Client   │  :25565 │ (local) │          │  (port 443) │       │  :25565  │
-└──────────┘         └─────────┘          └─────────────┘       └──────────┘
+┌────────┐         ┌─────────┐         ┌─────────────────────────┐
+│ Client │ ─ TLS ─ │ Relay   │ ─ TLS ─ │ TEE                     │
+│        │         │ (ngrok) │         │ ┌─────────────────────┐ │
+│        │         │         │         │ │ Self-signed cert    │ │
+│        │         │         │         │ │ Attestation includes│ │
+│        │         │         │         │ │ cert fingerprint    │ │
+│        │         │         │         │ └─────────────────────┘ │
+└────────┘         └─────────┘         └─────────────────────────┘
+           relay only sees
+           encrypted TLS traffic
 ```
 
-**Pros:** Any TCP protocol works
-**Cons:** Requires client-side setup
+## Oracle with Self-Signed TLS
 
-### Minecraft Example
-
-Server side (in TEE):
-```yaml
-services:
-  minecraft:
-    image: itzg/minecraft-server
-    environment:
-      - EULA=TRUE
-    ports:
-      - "25565:25565"
-```
-
-Client side - create `stunnel.conf`:
-```ini
-foreground = yes
-pid = ./stunnel.pid
-
-[minecraft]
-client = yes
-accept = 127.0.0.1:25565
-connect = <app-id>-25565.dstack-prod5.phala.network:443
-```
-
-Run stunnel and connect your Minecraft client to `localhost:25565`:
-```bash
-stunnel stunnel.conf
-```
-
-### SSH Example
-
-Using socat instead of stunnel (simpler one-liner):
-```bash
-socat TCP-LISTEN:2222,fork,reuseaddr \
-  OPENSSL:<app-id>-22.dstack-prod5.phala.network:443
-```
-
-Or configure `~/.ssh/config`:
-```
-Host tee-box
-    ProxyCommand openssl s_client -quiet -connect <app-id>-22.dstack-prod5.phala.network:443
-    User root
-```
-
-Then: `ssh tee-box`
-
-> **macOS note:** System openssl is LibreSSL. Install OpenSSL via homebrew: `brew install openssl`
-
-## Approach 3: Ngrok Reverse Proxy
-
-Run ngrok inside the TEE to get a public URL that bypasses the dstack gateway entirely. Useful when:
-- You need a non-TLS public endpoint
-- You want to control your own domain
-- You're building a reverse tunnel
-
-```
-┌──────────┐           ┌─────────────┐   tunnel   ┌──────────┐
-│  Client  │ ───────── │ ngrok edge  │ ────────── │ TEE App  │
-│          │  public   │  (ngrok.io) │            │ + ngrok  │
-└──────────┘   URL     └─────────────┘            └──────────┘
-```
-
-**Pros:** Public IP, custom domains, bypasses gateway
-**Cons:** Trusts ngrok infrastructure, requires account
-
-### Example
+Building on the oracle from [02-kms-and-signing](../02-kms-and-signing), we add:
+- Self-signed TLS certificate generated at startup
+- Certificate fingerprint included in `/attestation` response
 
 ```yaml
 services:
   app:
-    image: nginx
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:22-slim
+        RUN apt-get update && apt-get install -y openssl
+        WORKDIR /app
+        RUN npm init -y && npm install @phala/dstack-sdk viem
+        COPY index.mjs .
+        CMD ["node", "index.mjs"]
     ports:
-      - "80:80"
-
-  ngrok:
-    image: ngrok/ngrok:alpine
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-    command: http app:80
-    depends_on:
-      - app
+      - "8443:8443"
+    volumes:
+      - /var/run/dstack.sock:/var/run/dstack.sock
 ```
 
-Deploy with your ngrok auth token:
+## index.mjs
+
+See [index.mjs](index.mjs) for the full implementation. Key points:
+
+```javascript
+// Generate self-signed cert at startup
+execSync(`openssl req -x509 -newkey rsa:2048 ... -subj "/CN=tee-oracle"`)
+
+// Hash the DER-encoded certificate (matches what TLS clients see)
+const certDer = Buffer.from(pemToDer(certPem), 'base64')
+const certFingerprint = createHash("sha256").update(certDer).digest("hex")
+
+// Include fingerprint in attestation
+app.get("/attestation", async (req, res) => {
+  const reportData = Buffer.from(certFingerprint, "hex")
+  const quote = await client.getQuote(reportData)
+  res.json({ certFingerprint, quote: quote.quote.toString("hex"), ... })
+})
+```
+
+## Verification Script
+
+See [verify_tls.py](verify_tls.py) for the full implementation. The script:
+
+1. Connects to the endpoint and extracts the TLS certificate fingerprint
+2. Fetches `/attestation` (ignoring cert validation initially)
+3. Verifies the certificate fingerprint matches what's in the attestation
+4. Verifies the attestation quote itself
+
+```
+$ python3 verify_tls.py https://localhost:8443
+
+Verifying: https://localhost:8443
+
+1. Connecting and getting certificate...
+   Certificate fingerprint: 789b0a77f2ad4b17...
+2. Fetching attestation...
+   Attested fingerprint:    789b0a77f2ad4b17...
+3. Verifying certificate matches attestation...
+   Certificate fingerprint matches attestation
+4. Verifying attestation...
+   Quote present (full verification requires trust-center)
+
+============================================================
+SUCCESS: TLS certificate is bound to TEE attestation
+The connection is end-to-end secure regardless of relay.
+```
+
+## Testing Locally
+
 ```bash
-NGROK_AUTHTOKEN=<your-token> phala deploy ...
+# Terminal 1: Start simulator
+phala simulator start
+
+# Terminal 2: Run oracle with TLS
+docker compose build
+docker compose run --rm -p 8443:8443 \
+  -v ~/.phala-cloud/simulator/0.5.3/dstack.sock:/var/run/dstack.sock app
+
+# Terminal 3: Verify
+python3 verify_tls.py https://localhost:8443
 ```
 
-The ngrok container logs will show your public URL.
+## Connectivity Options
 
-### Alternative: Cloudflare Tunnel
+The verification works regardless of how you reach the TEE - the attestation binds the certificate.
 
-Similar concept using Cloudflare:
-```yaml
-services:
-  app:
-    image: nginx
-    ports:
-      - "80:80"
+| Method | TLS Termination | Trust Path |
+|--------|-----------------|------------|
+| Direct (localhost) | Your App TEE | Single TEE |
+| Self-signed + attestation | Your App TEE | Single TEE |
+| dstack gateway | Gateway TEE | Gateway TEE → Your App TEE |
+| dstack-ingress | Your App TEE | Single TEE (with Let's Encrypt) |
+| ngrok TCP tunnel | Your App TEE | Single TEE (ngrok is transport only) |
 
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
-    depends_on:
-      - app
-```
+### For Production
 
-## Trust Considerations
+**dstack-ingress** handles Let's Encrypt inside the TEE using DNS-01 challenges (no inbound port 80 needed). See [dstack-ingress](../../custom-domain/dstack-ingress) for setup.
 
-| Approach | Who sees plaintext? | Who can intercept? |
-|----------|--------------------|--------------------|
-| Gateway | dstack gateway | Gateway operator |
-| Stunnel | dstack gateway | Gateway operator |
-| Ngrok | ngrok servers | Ngrok |
-| CF Tunnel | Cloudflare | Cloudflare |
+### About the dstack Gateway
 
-For end-to-end encryption where only the TEE sees plaintext, you need:
-- TLS termination inside the TEE (see [05-hardening-https](../05-hardening-https))
-- Custom domain with cert inside TEE (see `dstack-ingress`)
+The dstack gateway is itself a TEE application - it's a dstack docker compose running in its own enclave. TLS termination happens inside the gateway's TEE, not in untrusted infrastructure.
+
+**Audit surface:** When using the gateway, verifying the gateway's attestation becomes part of your trust assumptions. The gateway code is open source and scheduled for security audit.
+
+For maximum isolation (single TEE in the trust path), use the self-signed + attestation approach from this tutorial or dstack-ingress.
 
 ## Files
 
 ```
 03-gateway-and-tls/
-├── docker-compose.yaml        # TCP echo server for stunnel testing
-├── docker-compose-ngrok.yaml  # Ngrok reverse proxy example
-├── stunnel-client.conf        # Client-side stunnel config template
+├── docker-compose.yaml    # Oracle with self-signed TLS
+├── index.mjs              # HTTPS server with attestation
+├── verify_tls.py          # Verification script
 └── README.md
 ```
 
 ## Next Steps
 
-- [04-onchain-oracle](../04-onchain-oracle): On-chain verification with AppAuth
-- [05-hardening-https](../05-hardening-https): TLS inside TEE with OCSP/CT verification
+- [04-onchain-oracle](../04-onchain-oracle): AppAuth contracts and on-chain verification
+- [05-hardening-https](../05-hardening-https): Let's Encrypt with dstack-ingress
 
-## References
+## Key Insight
 
-- [tcp-port-forwarding](../../tcp-port-forwarding): More socat examples
-- [ssh-over-gateway](../../ssh-over-gateway): SSH server setup
-- [minecraft](../../minecraft): Full minecraft example
+**The certificate doesn't need to be signed by a CA.** The attestation IS the trust anchor. By binding the certificate fingerprint to a valid TEE attestation, we prove the certificate was generated inside the TEE. This pattern works for any self-signed credential.
