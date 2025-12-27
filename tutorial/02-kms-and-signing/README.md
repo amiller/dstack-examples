@@ -219,6 +219,19 @@ For more controlled multi-node setups (owner-approved devices, custom AppAuth), 
 - [03-gateway-and-tls](../03-gateway-and-tls): Custom domains and TLS
 - [04-onchain-oracle](../04-onchain-oracle): On-chain verification contract, AppAuth deployment
 
+## Open Questions
+
+> **TODO: Investigate AppAuth in baremetal dstack**
+>
+> Currently, each new deployment requires calling `addComposeHash()` even if `allowAnyDevice=true` and the device is already whitelisted. This is because the compose_hash changes with each deployment (different salt/name).
+>
+> Questions to investigate:
+> - Where does baremetal dstack validate against AppAuth? (Not just Phala Cloud)
+> - Can we specify a fixed salt to get the same compose_hash across replicas?
+> - Should AppAuth support wildcards or patterns for compose validation?
+>
+> See: [04-onchain-oracle](../04-onchain-oracle) for AppAuth contract details.
+
 ## References
 
 - [Key Management Protocol](https://docs.phala.network/dstack/design-documents/key-management-protocol)
