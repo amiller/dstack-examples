@@ -66,15 +66,23 @@ phala deploy -n tee-oracle -c docker-compose.yaml
 
 ## Verification
 
-The quote contains measured values. Compare them against reference values you trust:
+The quote contains **measured values**. Verification means comparing them against **reference values** you trust.
 
-| Measured (from quote) | Reference | Source |
-|-----------------------|-----------|--------|
-| Intel signature | Intel root CA | Built into dcap-qvl |
-| MRTD, RTMR0-2 | Calculated from OS image | Download from [meta-dstack releases](https://github.com/Dstack-TEE/meta-dstack/releases) |
-| compose-hash (RTMR3) | `sha256(app-compose.json)` | Build from your docker-compose.yaml |
-| report_data | `sha256(statement)` | Hash the statement yourself |
+### Reference Values: Where They Come From
+
+| Measured Value | Reference Value | Who Provides It |
+|----------------|-----------------|-----------------|
+| Intel signature | Intel root CA | Intel (built into dcap-qvl) |
+| MRTD, RTMR0-2 | Hash of OS image | [meta-dstack releases](https://github.com/Dstack-TEE/meta-dstack/releases) |
+| compose-hash (RTMR3) | `sha256(app-compose.json)` | **The developer** |
+| report_data | `sha256(statement)` | Computed from output |
 | tlsFingerprint | Certificate fingerprint | Fetch from api.coingecko.com |
+
+This is the core insight: **attestation is only as trustworthy as your reference values.**
+
+- Intel provides reference values for hardware authenticity
+- Dstack maintainers provide reference values for the OS layer
+- **The app developer must provide reference values for the application layer**
 
 ### Step 1: Validate Quote and Compare Measurements
 
@@ -159,8 +167,110 @@ cat response.json | jq -r '.statement.tlsFingerprint'
 
 ---
 
+## Critical Thinking: The Auditor's Perspective
+
+> *This section appears throughout the tutorial. Each chapter examines a different trust assumption.*
+
+### The Fundamental Question
+
+As an auditor, your job is to answer: **"Does the deployed system behave according to the source code I reviewed?"**
+
+TEE attestation helps, but only partially. The quote proves *some code* is running in isolated hardware. It gives you hashes. But hashes of what?
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    The Reference Value Problem                  │
+│                                                                 │
+│   What you audit:     Source code, Dockerfile, docker-compose  │
+│   What quote gives:   compose-hash = 0x392b8a1f...             │
+│                                                                 │
+│   The gap:  Can you compute 0x392b8a1f from what you audited?  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Trust Layers
+
+Every TEE app has a trust stack. At each layer, ask: *"Where does the reference value come from?"*
+
+| Layer | What You're Trusting | Reference Value Source |
+|-------|---------------------|------------------------|
+| Hardware | Intel TDX is secure | Intel's attestation infrastructure |
+| Firmware | No backdoors in BIOS/firmware | Platform vendor |
+| OS | Dstack boots what it claims | meta-dstack releases (open source, reproducible) |
+| App | Code matches what was audited | **Developer-provided** |
+
+The bottom three layers have established reference value sources. The app layer is the developer's responsibility.
+
+### How Auditing Actually Works
+
+An auditor doesn't just read code—they run it. The workflow:
+
+1. **Read source** — Form a mental model of intended behavior
+2. **Run locally** — Test that model: "does it actually do X? what happens if Y?"
+3. **Conclude** — "This code behaves as I understand it. It's safe."
+
+The auditor's conclusion is based on **what they ran**, not what they read. Reading code is necessary but not sufficient—you have to see it execute.
+
+### The Behavioral Gap Threat
+
+Here's the problem: what the auditor ran locally might differ from what's deployed.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    The Behavioral Gap                           │
+│                                                                 │
+│   Auditor builds locally  →  observes behavior A  →  "safe"    │
+│   Production build        →  has behavior B (subtly different) │
+│   Attestation proves      →  production runs *something*       │
+│                                                                 │
+│   The auditor certified behavior A.                            │
+│   Production has behavior B.                                    │
+│   The audit doesn't apply.                                      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+This gap can arise from:
+- Different dependency versions resolved at build time
+- Timestamps or randomness affecting behavior
+- Build environment differences (compiler, OS, architecture)
+- Intentional divergence (malicious or accidental)
+
+**The hash question isn't abstract.** When an auditor asks "does my local build produce the same hash as production?"—they're really asking: *"Is my local model of the system actually the production system, or just a similar-looking approximation?"*
+
+### What Reproducibility Actually Provides
+
+Reproducibility closes the behavioral gap. If:
+- Auditor builds from source → gets hash X
+- Production attestation shows → hash X
+
+Then the auditor's local testing environment **is** the production system. Their conclusions apply. The audit is meaningful.
+
+Without reproducibility, the auditor has two options:
+1. **Trust the developer's build** — "I audited something similar, probably fine"
+2. **Pull the production image and diff manually** — Tedious, error-prone, incomplete
+
+Neither is satisfactory. Reproducibility makes the audit rigorous.
+
+### The Smart Contract Analogy
+
+Smart contracts solved this problem:
+- Source code on Etherscan
+- Compiler version specified
+- Anyone can recompile and verify the bytecode matches on-chain codehash
+- DYOR is actually possible
+
+TEE apps need the same pattern. The attestation is like the on-chain codehash. But without reproducible builds, there's no way to connect it back to auditable source.
+
+---
+
+**Next:** [01a-reproducible-builds](../01a-reproducible-builds) shows how developers can provide the evidence auditors need—and protect against bitrot that breaks verification over time.
+
+---
+
 ## Next Steps
 
+- [01a-reproducible-builds](../01a-reproducible-builds): Make builds verifiable for auditors
 - [02-kms-and-signing](../02-kms-and-signing): Derive persistent keys and sign messages
 - [03-gateway-and-tls](../03-gateway-and-tls): Custom domains and TLS
 
@@ -173,7 +283,7 @@ cat response.json | jq -r '.statement.tlsFingerprint'
 
 ```
 01-attestation/
-├── docker-compose.yaml  # Oracle app (self-contained)
-├── verify_full.py       # Python verification script
-└── README.md            # This file
+├── docker-compose.yaml  # Oracle app (quick-start, non-reproducible)
+├── verify_full.py       # Attestation verification script
+└── README.md
 ```

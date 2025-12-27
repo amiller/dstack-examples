@@ -1,0 +1,23 @@
+services:
+  tcp-echo:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM python:3.12-slim
+        RUN cat > /server.py <<'EOF'
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(('0.0.0.0', 8080))
+        s.listen()
+        print('TCP echo server on :8080')
+        while True:
+            conn, addr = s.accept()
+            print(f'Connected: {addr}')
+            conn.sendall(b'ECHO> ')
+            while data := conn.recv(1024):
+                conn.sendall(data)
+        EOF
+        CMD ["python", "/server.py"]
+    ports:
+      - "8080:8080"
