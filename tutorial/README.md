@@ -4,13 +4,9 @@ This tutorial teaches you to build **DevProof** (or "unruggable") applications u
 
 ## Why DevProof?
 
-If you follow typical Dstack guides, you'll get an ordinary server where you (the admin) can still "rug" your users. The app runs in a TEE, but the developer retains backdoors.
-
-**DevProof** is a different threat model: we assume the developer themselves might be malicious, and design the system so they *can't* betray users even if they wanted to.
+**DevProof** is a threat model where we assume the developer themselves might be malicious, and design the system so they *can't* betray users even if they wanted to.
 
 This is what smart contracts and DeFi aspire to, but TEEs let us apply it to practical, general-purpose code — not just on-chain logic.
-
-### Examples of DevProof reasoning
 
 | Application | DevProof property |
 |-------------|-------------------|
@@ -19,17 +15,17 @@ This is what smart contracts and DeFi aspire to, but TEEs let us apply it to pra
 | User consent collection | Developer can prove they collected N consents |
 | Data handling | Developer can prove no user data was exposed |
 
-### Analogies from Smart Contracts
+## Why This Tutorial?
 
-Smart contracts achieve DevProof design through:
-- Open source code
-- On-chain codehash compared against verifiable builds
-- Users expected to DYOR (do your own research)
-- Auditors verify source and on-chain deployment match
-- Immutable by default; upgrade mechanisms become audit surfaces
-- Upgrade policies with on-chain "due process" (timelocks, multisig)
+**Running in a TEE doesn't automatically make your app DevProof.** If you follow typical Dstack guides, you'll get an ordinary server where you (the admin) can still "rug" your users. The app runs in a TEE, but the developer retains backdoors.
 
-TEE apps need similar patterns — this tutorial shows how.
+DevProof design requires intentional effort:
+- Users must be able to verify what code is running (not just "some TEE code")
+- Builds must be reproducible so auditors can confirm the hash
+- Upgrade mechanisms must be visible on-chain
+- The verification path must be documented and accessible
+
+Smart contracts solved these problems through open source, verifiable builds, on-chain codehash, and transparent upgrade policies. TEE apps need similar patterns — but the techniques are non-obvious and scattered across documentation. This tutorial brings them together.
 
 ## Running Example: TEE Oracle
 
@@ -118,7 +114,7 @@ phala deploy -n my-app -c docker-compose.yaml
 3. **[03-keys-and-replication](./03-keys-and-replication)** — Persistent keys via KMS and multi-node deployments
 4. **[04-gateways-and-tls](./04-gateways-and-tls)** — Self-signed TLS with attestation-bound certificates
 5. **[05-onchain-authorization](./05-onchain-authorization)** — AppAuth contracts for on-chain key derivation control
-6. **[06-hardening-https](./06-hardening-https)** — OCSP stapling, CRL checking, CT records
+6. **[06-hardening-https](./06-hardening-https)** — OCSP stapling, CRL checking, CT records ([oracle template](https://cloud.phala.network/templates/node-oracle-template))
 
 ### Advanced
 
