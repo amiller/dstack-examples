@@ -356,6 +356,20 @@ Smart contracts solved this problem:
 
 TEE apps need the same pattern. The attestation is like the on-chain codehash. But without reproducible builds, there's no way to connect it back to auditable source.
 
+### The Upgradeability Question
+
+Verifying the current code isn't enough. An auditor should also ask: **"Can this code change tomorrow?"**
+
+When a dstack app uses KMS (most do), there's an **AppAuth contract** on Base that controls which compose hashes are authorized. This is the upgrade mechanism:
+
+- **Who is the owner?** — The address that can authorize new code versions
+- **What's the upgrade history?** — All `addComposeHash()` calls are recorded as events
+- **Is it locked?** — Has `disableUpgrades()` been called?
+
+Check the AppAuth contract on [Basescan](https://basescan.org) to see the full history of authorized code versions. Unlike traditional servers where deployments are invisible, every "upgrade" is permanently recorded on-chain.
+
+See [05-onchain-authorization](../05-onchain-authorization#viewing-upgrade-history) for how to inspect upgrade history.
+
 ---
 
 **Next:** [02-bitrot-and-reproducibility](../02-bitrot-and-reproducibility) shows how developers can provide the evidence auditors need—and protect against bitrot that breaks verification over time.

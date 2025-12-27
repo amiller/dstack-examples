@@ -105,6 +105,34 @@ function setAllowAnyDevice(bool allow) external onlyOwner;
 function disableUpgrades() external onlyOwner;  // Permanent!
 ```
 
+## Viewing Upgrade History
+
+As discussed in [01-attestation-and-reference-values](../01-attestation-and-reference-values#the-upgradeability-question), verifying the current code isn't enough—auditors need to understand the upgrade policy and history.
+
+Every `addComposeHash()`, `addDevice()`, and other owner action emits an event. This creates an auditable on-chain history of all authorized code versions.
+
+**View on Basescan:**
+
+```
+https://basescan.org/address/<APP_AUTH_ADDRESS>#events
+```
+
+Example events you'll see:
+- `ComposeHashAdded(bytes32 composeHash)` — new code version authorized
+- `ComposeHashRemoved(bytes32 composeHash)` — code version revoked
+- `DeviceAdded(bytes32 deviceId)` — new TEE device authorized
+- `AllowAnyDeviceChanged(bool allow)` — device policy changed
+
+**Why this matters:** Users and auditors can verify the complete history of what code was ever authorized to run. Unlike traditional servers where deployments are invisible, every "upgrade" is permanently recorded on-chain.
+
+**Query with cast:**
+
+```bash
+# Get all ComposeHashAdded events
+cast logs --from-block 0 --address $APP_AUTH_ADDRESS \
+  "ComposeHashAdded(bytes32)" --rpc-url https://mainnet.base.org
+```
+
 ## On-Chain Verification Contract
 
 `TeeOracle.sol` verifies the signature chain from [03-keys-and-replication](../03-keys-and-replication) on-chain:
