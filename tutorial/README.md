@@ -45,42 +45,60 @@ Each section adds a layer until we have a fully DevProof oracle.
 
 ## Development Environment
 
-### Option 1: Plain Docker Compose
+**You can complete the entire tutorial without TDX hardware.** The simulator provides everything needed to develop and test locally.
+
+### Requirements
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| Docker | Run apps | [docker.com](https://docker.com) |
+| Phala CLI | Simulator + deploy | `npm install -g @phala/cloud-cli` |
+| Python 3 | Test scripts | System package |
+| Foundry | On-chain testing (04) | [getfoundry.sh](https://getfoundry.sh) |
+
+### Local Development (Simulator)
 
 ```bash
-docker compose up
-```
-
-Most examples run without any TEE-specific setup. The dstack SDK calls (`getKey()`, `tdxQuote()`) will fail, but you can still test the rest of your application logic.
-
-### Option 2: Phala Simulator
-
-```bash
-# Install Phala CLI
-npm install -g @phala/cloud-cli
-
-# Start the simulator
+# Start the simulator (provides mock KMS + attestation)
 phala simulator start
 
-# Run with simulated dstack socket
-docker compose run --rm \
+# Run any tutorial section
+cd 02-kms-and-signing
+docker compose build
+docker compose run --rm -p 8080:8080 \
   -v ~/.phala-cloud/simulator/0.5.3/dstack.sock:/var/run/dstack.sock \
   app
+
+# Run tests
+pip install -r requirements.txt
+python3 test_local.py
 ```
 
-The simulator provides a mock dstack socket so `getKey()` and attestation calls work locally.
+The simulator provides:
+- `getKey()` — deterministic key derivation
+- `tdxQuote()` — mock attestation quotes
+- Signature chains verifiable against simulator KMS root
 
-### Option 3: Phala Cloud
+### On-Chain Testing (Anvil)
+
+For [04-onchain-oracle](./04-onchain-oracle), use anvil for local contract testing:
 
 ```bash
-phala deploy -n my-app -c docker-compose.yaml
+anvil &                    # Local Ethereum node
+forge create TeeOracle.sol # Deploy verification contract
 ```
 
-### Option 4: Self-hosted Dstack
+### Production Deployment
 
-See [Dstack TEE documentation](https://docs.phala.com/dstack/local-development) for running your own TDX nodes.
+```bash
+# Phala Cloud (managed TDX)
+phala deploy -n my-app -c docker-compose.yaml
 
-> **Note:** A DevProof design minimizes dependency on any single provider. These are just deployment options — the verification techniques in this tutorial work regardless of where you run.
+# Self-hosted TDX
+# See https://docs.phala.com/dstack/local-development
+```
+
+> **Note:** A DevProof design minimizes dependency on any single provider. The verification techniques work regardless of where you deploy.
 
 ### SDK Options
 

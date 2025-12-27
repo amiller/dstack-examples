@@ -121,12 +121,46 @@ function verify(
 ) public view returns (bool isValid)
 ```
 
-Deploy with anvil for local testing:
+## Test with Anvil
+
+Test the full on-chain verification locally:
+
 ```bash
+# Terminal 1: Start anvil
 anvil &
-forge create TeeOracle.sol:TeeOracle \
-  --constructor-args $KMS_ROOT $APP_ID \
-  --private-key $ANVIL_KEY
+
+# Terminal 2: Start oracle (with simulator)
+phala simulator start
+docker compose run --rm -p 8080:8080 \
+  -v ~/.phala-cloud/simulator/0.5.3/dstack.sock:/var/run/dstack.sock app
+
+# Terminal 3: Run anvil test
+pip install -r requirements.txt
+python3 test_anvil.py
+```
+
+Output:
+```
+TeeOracle Anvil Test
+============================================================
+Oracle: http://localhost:8080
+Anvil: http://localhost:8545
+KMS Root: 0x8f2cF602C9695b23130367ed78d8F557554de7C5
+
+Anvil connected, block: 0
+Fetching from oracle...
+  Price: $87436
+  App ID: ea549f02e1a25fabd1cb788380e033ec5461b2ff
+  App Pubkey: 02b85cceca0c02d878f0...
+Deploying TeeOracle.sol...
+  Contract: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+Calling verify() on-chain...
+
+============================================================
+SUCCESS: On-chain verification passed
+  - KMS signature verified
+  - App signature verified
+  - Message signature verified
 ```
 
 ## Files
@@ -134,10 +168,12 @@ forge create TeeOracle.sol:TeeOracle \
 ```
 04-onchain-oracle/
 ├── TeeOracle.sol              # On-chain signature verification
+├── foundry.toml               # Foundry config (via-ir for stack depth)
+├── test_anvil.py              # Test with local anvil
+├── test_phalacloud.py         # Test on Phala Cloud
 ├── deploy_replica.py          # Deploy replica using existing appId
 ├── add_device.py              # Add device to whitelist (Option 2)
 ├── add_compose_hash.py        # Add compose hash to whitelist
-├── test_phalacloud.py         # Test on Phala Cloud
 ├── docker-compose.yaml        # Oracle app (same as 02)
 ├── requirements.txt
 └── README.md

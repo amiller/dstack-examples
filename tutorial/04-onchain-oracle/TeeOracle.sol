@@ -104,7 +104,7 @@ contract TeeOracle {
         return ecrecover(hash, v, r, s);
     }
 
-    function _compressedPubkeyToAddress(bytes calldata pubkey) internal pure returns (address) {
+    function _compressedPubkeyToAddress(bytes calldata pubkey) internal view returns (address) {
         require(pubkey.length == 33, "need compressed pubkey");
         // Decompress SEC1 compressed public key
         uint8 prefix = uint8(pubkey[0]);
@@ -130,7 +130,7 @@ contract TeeOracle {
         return address(uint160(uint256(hash)));
     }
 
-    function _modExp(uint256 base, uint256 exp, uint256 mod) internal pure returns (uint256) {
+    function _modExp(uint256 base, uint256 exp, uint256 mod) internal view returns (uint256) {
         // Use precompile at 0x05 for modular exponentiation
         bytes memory input = abi.encodePacked(
             uint256(32), uint256(32), uint256(32),
