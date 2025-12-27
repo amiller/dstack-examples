@@ -154,13 +154,14 @@ ENV npm_config_cache=/tmp/npm-cache
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+# --chmod=644 normalizes permissions across environments (local vs CI)
+COPY --chmod=644 package.json package-lock.json ./
 
 RUN npm ci --omit=dev --ignore-scripts && \
     rm -rf /tmp/npm-cache /tmp/node-compile-cache && \
     find /app -exec touch -d "@${SOURCE_DATE_EPOCH}" {} + 2>/dev/null || true
 
-COPY app.mjs ./
+COPY --chmod=644 app.mjs ./
 RUN touch -d "@${SOURCE_DATE_EPOCH}" /app/app.mjs
 
 CMD ["node", "app.mjs"]
@@ -230,6 +231,78 @@ jobs:
           EXPECTED=$(jq -r .image_hash build-manifest.json.committed)
           ACTUAL=$(jq -r .image_hash build-manifest.json)
           [[ "$EXPECTED" == "$ACTUAL" ]] || exit 1
+```
+
+---
+
+## Debugging Non-Reproducible Builds
+
+When builds don't match, you need to find what differs. Here's the workflow:
+
+### Step 1: Compare Layer Hashes
+
+```bash
+# Extract both images
+mkdir -p /tmp/img1 /tmp/img2
+tar -xf build1.tar -C /tmp/img1
+tar -xf build2.tar -C /tmp/img2
+
+# Get layer lists from manifests
+cat /tmp/img1/index.json | jq -r '.manifests[0].digest' | cut -d: -f2 | \
+  xargs -I{} cat /tmp/img1/blobs/sha256/{} | jq '.layers[].digest'
+```
+
+### Step 2: Find Differing Layers
+
+```bash
+# Compare layer hashes - identical base image layers will match
+comm -3 <(ls /tmp/img1/blobs/sha256/ | sort) <(ls /tmp/img2/blobs/sha256/ | sort)
+```
+
+### Step 3: Extract and Diff Layer Contents
+
+```bash
+# Extract a differing layer
+mkdir -p /tmp/layer1 /tmp/layer2
+tar -xf /tmp/img1/blobs/sha256/<hash1> -C /tmp/layer1
+tar -xf /tmp/img2/blobs/sha256/<hash2> -C /tmp/layer2
+
+# Compare
+diff -r /tmp/layer1 /tmp/layer2
+```
+
+### Step 4: Check Tar Metadata
+
+Often the file contents are identical but tar metadata differs:
+
+```bash
+tar -tvf /tmp/img1/blobs/sha256/<hash1> | head
+tar -tvf /tmp/img2/blobs/sha256/<hash2> | head
+```
+
+Look for differences in:
+- **File permissions** (`-rw-r--r--` vs `-rw-rw-r--`)
+- **Ownership** (uid/gid)
+- **Timestamps** (should be 1970-01-01 if normalized)
+
+### Common CI vs Local Divergence
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| **File permissions** | Local files have different perms than CI checkout | `COPY --chmod=644` |
+| **Buildx version** | Different `rewrite-timestamp` behavior | Pin buildx version or update both |
+| **Index.json structure** | Buildx versions add different metadata | Usually harmless if layer hashes match |
+
+### File Permissions: The Most Common Issue
+
+Git doesn't preserve all file permissions. Your local files might be `664` while CI checkout is `644`:
+
+```dockerfile
+# BAD: Copies source file permissions (varies by environment)
+COPY package.json ./
+
+# GOOD: Normalizes permissions
+COPY --chmod=644 package.json ./
 ```
 
 ---
@@ -312,6 +385,7 @@ Before claiming your app is auditable:
 
 - [02-kms-and-signing](../02-kms-and-signing): Derive persistent keys
 - [03-gateway-and-tls](../03-gateway-and-tls): Custom domains and TLS
+- For Nix-based reproducible builds, see the [reproducible-builds-playground](../../refs/reproducible-builds-playground)
 
 ## Files
 

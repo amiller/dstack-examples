@@ -129,6 +129,7 @@ Output:
 >   "docker_compose_file": "<your compose content>",
 >   "pre_launch_script": "#!/bin/bash\n...",
 >   "kms_enabled": true,
+>   "salt": "random-hex-string",
 >   ...
 > }
 > ```
@@ -137,6 +138,80 @@ Output:
 > **Important:** The `pre_launch_script` is included in the hash. Phala Cloud injects its own prelaunch script. To audit, fetch the complete `app-compose.json` via `phala cvms attestation <app>`. See [prelaunch-script](../../prelaunch-script) for the Phala Cloud script source.
 >
 > For standalone verification that builds app-compose.json locally: [attestation/configid-based](../../attestation/configid-based)
+
+### The app-compose.json Manifest
+
+The compose-hash in RTMR3 is the SHA-256 of an `app-compose.json` manifest:
+
+```json
+{
+  "manifest_version": 2,
+  "name": "tee-oracle",
+  "runner": "docker-compose",
+  "docker_compose_file": "services:\n  app:\n    image: ...",
+  "kms_enabled": true,
+  "gateway_enabled": true,
+  "public_logs": true,
+  "public_sysinfo": true,
+  "pre_launch_script": "#!/bin/bash\n...",
+  "allowed_envs": [],
+  "tproxy_enabled": true
+}
+```
+
+**Where this comes from:**
+- `docker_compose_file`: Your docker-compose.yaml content
+- `pre_launch_script`: Default provided by Phala Cloud, can be customized
+- Other fields: Deployment configuration options
+
+**How to fetch it:**
+- Deployed app: `phala cvms attestation <app> --json | jq .app_info.tcb_info.app_compose`
+- Running on dstack: `curl localhost:8090/info`
+- Simulator: Uses fixed manifest at `sdk/simulator/app-compose.json`
+
+### Two Verification Approaches
+
+Dstack supports two ways to verify compose-hash:
+
+**ConfigID-based (v0.5.1+)** — simpler, used by this tutorial
+- Compose-hash is stored directly in `mr_config_id` (padded to 96 chars)
+- Just compare measurement registers to known good values
+- See: [attestation/configid-based](../../attestation/configid-based)
+
+**RTMR3-based** — older, more complex
+- Compose-hash is an event in RTMR3's event log
+- Must replay the event log: each event's digest is hashed in sequence
+- Events include: `app-id`, `compose-hash`, `instance-id`, `key-provider`
+- See: [attestation/rtmr3-based](../../attestation/rtmr3-based)
+
+The `verify_full.py` in this tutorial uses ConfigID-based:
+```python
+config_id = report['mr_config_id']
+verified_hash = config_id[2:66]  # Extract compose hash after '01' prefix
+```
+
+### Programmatic Verification
+
+The `@phala/dstack-verifier` library handles both approaches automatically:
+
+```typescript
+import { VerificationService } from '@phala/dstack-verifier'
+
+const service = new VerificationService()
+const result = await service.verify({
+  domain: 'myapp.phala.network',
+}, {
+  hardware: true,
+  os: true,
+  sourceCode: true,  // Verifies compose-hash
+})
+
+if (result.success) {
+  console.log('Verification passed')
+}
+```
+
+See [trust-center](https://github.com/phatcopy/trust-center) for the full verification platform and [Phala docs](https://docs.phala.com/phala-cloud/attestation/trust-center-verification) for detailed reference value explanations.
 
 ### Step 2: Verify report_data Binding
 
